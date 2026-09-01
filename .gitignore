@@ -1,0 +1,16 @@
+/bin/
+/tmp/
+*.exe
+*.test
+*.out
+.DS_Store
+
+node_modules/
+frontend/dist/assets/
+frontend/wailsjs/
+desktop/build/
+
+# Local env and data
+.env
+.data/
+/data/

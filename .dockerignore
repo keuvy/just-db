@@ -1,0 +1,7 @@
+.git
+data
+node_modules
+frontend/node_modules
+desktop/build
+*.md
+.env

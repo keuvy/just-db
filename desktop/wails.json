@@ -1,0 +1,20 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "just-db",
+  "outputfilename": "just-db",
+  "frontend:dir": "../frontend",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "wailsjsdir": "../frontend",
+  "author": {
+    "name": "keuvy"
+  },
+  "info": {
+    "companyName": "just-db",
+    "productName": "just-db",
+    "productVersion": "0.1.0",
+    "comments": "Import and export PostgreSQL and MySQL databases"
+  }
+}

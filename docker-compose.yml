@@ -1,0 +1,13 @@
+services:
+  just-db:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - justdb-data:/data
+    environment:
+      JUSTDB_LISTEN: 0.0.0.0:8080
+      JUSTDB_DATA: /data
+
+volumes:
+  justdb-data:

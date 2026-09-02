@@ -1,0 +1,83 @@
+# Desktop app
+
+The native app is **`just-db-desktop`**. It wraps the same Go engines as `just-db serve`. Do not name the GUI binary `just-db` — that name is the CLI.
+
+Window title stays **just-db**. Process / package name is **just-db-desktop** (`StartupWMClass=just-db-desktop`).
+
+## Build
+
+Needs Go 1.25+, Node.js 22+, and [Wails v2](https://wails.io/).
+
+Linux also needs GTK 3 and WebKitGTK **headers** (runtime packages are not enough):
+
+| Distro | Build packages |
+|---|---|
+| Debian / Ubuntu | `libgtk-3-dev` and `libwebkit2gtk-4.1-dev` (or `libwebkit2gtk-4.0-dev` on older releases) |
+| Fedora 40+ | `gtk3-devel webkit2gtk4.1-devel gcc` |
+| Arch | `gtk3 webkit2gtk-4.1 base-devel` |
+
+Fedora 40+ and current Debian/Ubuntu ship WebKitGTK **4.1**. `make desktop` passes `-tags webkit2_41` when `pkg-config webkit2gtk-4.1` is present. On older 4.0-only hosts, leave the tag off.
+
+```bash
+export PATH="$HOME/.local/go/bin:$HOME/go/bin:$PATH"
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+wails doctor
+make desktop
+```
+
+Dev loop (Vite + live reload):
+
+```bash
+make desktop-dev
+```
+
+The binary lands at `desktop/build/bin/just-db-desktop`.
+
+## Data directory
+
+Dumps default to a per-user backups folder (created on first launch):
+
+| OS | Path |
+|---|---|
+| Linux | `$XDG_DATA_HOME/just-db/backups` or `~/.local/share/just-db/backups` |
+| macOS | `~/Library/Application Support/just-db/backups` |
+
+Export opens a native save dialog (default name like `postgres-app-20260901-201500.dump`). Import uses the dump list in that folder, or a file picker if nothing is selected.
+
+## Client tools
+
+just-db shells out to `pg_dump` / `pg_restore` / `psql` and `mysqldump` / `mysql` (MariaDB names work too). Install the clients that match the **server major version**. Packages are **Recommends**, not Depends — you can install only Postgres tools, only MySQL tools, or both.
+
+| Distro | PostgreSQL | MySQL / MariaDB |
+|---|---|---|
+| Debian / Ubuntu | `postgresql-client` (or `postgresql-client-16`, …) | `mariadb-client` or `default-mysql-client` |
+| Fedora | `postgresql` | `mariadb` or `community-mysql` |
+| Arch | `postgresql` | `mariadb` |
+| macOS (Homebrew) | `brew install libpq` (then `brew link --force libpq` if needed) | `brew install mysql-client` or `mariadb` |
+
+`wails doctor` / the in-app engine cards show whether each binary is on `PATH`.
+
+## Linux packages
+
+After `make desktop`, if [nfpm](https://nfpm.goreleaser.com/) is installed:
+
+```bash
+make package-linux
+```
+
+That writes `.deb` and `.rpm` into `dist/`. Install examples:
+
+```bash
+sudo apt install ./dist/just-db-desktop_*.deb
+sudo dnf install ./dist/just-db-desktop-*.rpm
+```
+
+Arch: build the binary with `make desktop` and install `desktop/build/bin/just-db-desktop` plus `desktop/packaging/just-db-desktop.desktop` yourself (or wrap it in a PKGBUILD). The `.desktop` file execs `just-db-desktop`.
+
+## macOS
+
+```bash
+cd desktop && wails build
+```
+
+The `.app` is under `desktop/build/bin/`. Client tools from Homebrew are discovered on common `libpq` / `mysql-client` prefixes.

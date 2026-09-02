@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=just-db
+Comment=Import and export PostgreSQL and MySQL databases
+Exec=just-db-desktop
+Icon=just-db
+Terminal=false
+Categories=Development;Database;
+StartupWMClass=just-db-desktop
+Keywords=postgres;postgresql;mysql;mariadb;dump;restore;backup;

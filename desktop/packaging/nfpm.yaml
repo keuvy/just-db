@@ -1,0 +1,34 @@
+name: just-db-desktop
+arch: amd64
+platform: linux
+version: 0.1.0
+section: database
+priority: optional
+maintainer: keuvy
+description: |
+  Native desktop app for same-engine PostgreSQL and MySQL/MariaDB
+  import and export. Client tools are recommended, not required,
+  so a host that only runs one engine can still install the app.
+homepage: https://github.com/keuvy/just-db
+contents:
+  - src: ./desktop/build/bin/just-db-desktop
+    dst: /usr/bin/just-db-desktop
+    file_info:
+      mode: 0755
+  - src: ./desktop/packaging/just-db-desktop.desktop
+    dst: /usr/share/applications/just-db-desktop.desktop
+    file_info:
+      mode: 0644
+  - src: ./desktop/packaging/just-db.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/just-db.svg
+    file_info:
+      mode: 0644
+overrides:
+  deb:
+    recommends:
+      - postgresql-client
+      - mariadb-client
+  rpm:
+    recommends:
+      - postgresql
+      - mariadb

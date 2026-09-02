@@ -39,7 +39,7 @@ func main() {
 			},
 		},
 		Linux: &linux.Options{
-			ProgramName: appmeta.Name,
+			ProgramName: "just-db-desktop",
 		},
 	})
 	if err != nil {

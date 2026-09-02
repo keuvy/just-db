@@ -75,6 +75,8 @@ type WailsApp = {
   ListDumps: (dir: string) => Promise<DumpFile[]>;
   PickSavePath: (defaultName: string) => Promise<string>;
   PickOpenPath: () => Promise<string>;
+  DefaultDumpName: (name: string, database: string, format: string) => Promise<string>;
+  OpenBackupsDir: () => Promise<void>;
 };
 
 function wailsApp(): WailsApp | undefined {
@@ -151,7 +153,11 @@ export async function exportDump(
   if (app?.Export) {
     let dest = fileName;
     if (app.PickSavePath) {
-      const picked = await app.PickSavePath(fileName);
+      let suggested = fileName;
+      if (!suggested && app.DefaultDumpName) {
+        suggested = await app.DefaultDumpName(engine, connection.database, format);
+      }
+      const picked = await app.PickSavePath(suggested);
       if (!picked) {
         throw new Error("save cancelled");
       }
@@ -221,13 +227,26 @@ export function dumpDownloadURL(name: string): string {
   return `/api/dumps/${encodeURIComponent(name)}`;
 }
 
+export async function pickOpenPath(): Promise<string> {
+  const app = wailsApp();
+  if (!app?.PickOpenPath) {
+    return "";
+  }
+  return app.PickOpenPath();
+}
+
+export async function openBackupsDir(): Promise<void> {
+  const app = wailsApp();
+  if (!app?.OpenBackupsDir) {
+    return;
+  }
+  await app.OpenBackupsDir();
+}
+
 export async function listDumps(): Promise<DumpFile[]> {
   const app = wailsApp();
-  if (app?.ListDumps && !app.PickOpenPath) {
+  if (app?.ListDumps) {
     return app.ListDumps("");
-  }
-  if (runtimeMode() === "desktop") {
-    return [];
   }
   const response = await fetch("/api/dumps");
   if (!response.ok) {

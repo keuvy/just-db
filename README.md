@@ -42,10 +42,12 @@ make serve
 Desktop (from `desktop/`):
 
 ```bash
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
 wails doctor
-cd desktop && wails dev
+make desktop
 ```
+
+The GUI binary is **`just-db-desktop`** so it does not clash with the CLI. Details: [docs/desktop.md](docs/desktop.md).
 
 ## EasyPanel
 

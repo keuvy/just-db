@@ -7,6 +7,8 @@ import {
   getHealth,
   importDump,
   listDumps,
+  openBackupsDir,
+  pickOpenPath,
   runtimeMode,
   testConnection,
   type Connection,
@@ -69,12 +71,25 @@ function field(id: string, label: string, type: string, value: string | number):
   return `<label>${escapeHtml(label)}<input id="${id}" type="${type}" value="${escapeHtml(String(value))}" /></label>`;
 }
 
-function dumpOptions(dumps: DumpFile[]): string {
-  if (dumps.length === 0) {
-    return `<option value="">No dumps in data/backups yet</option>`;
+function dumpOptionValue(dump: DumpFile): string {
+  if (runtimeMode() === "desktop") {
+    return dump.path;
   }
-  return dumps
-    .map((dump) => `<option value="${escapeHtml(dump.name)}">${escapeHtml(dump.name)} (${dump.size} bytes)</option>`)
+  return dump.name;
+}
+
+function dumpOptions(dumps: DumpFile[] | null | undefined): string {
+  const list = dumps ?? [];
+  if (list.length === 0) {
+    const empty =
+      runtimeMode() === "desktop" ? "No dumps in the backups folder yet" : "No dumps in data/backups yet";
+    return `<option value="">${empty}</option>`;
+  }
+  return list
+    .map(
+      (dump) =>
+        `<option value="${escapeHtml(dumpOptionValue(dump))}">${escapeHtml(dump.name)} (${dump.size} bytes)</option>`,
+    )
     .join("");
 }
 
@@ -115,7 +130,7 @@ function setStatus(message: string, kind: "ok" | "bad" | "muted" = "muted"): voi
 
 async function refreshDumps(): Promise<void> {
   const select = document.querySelector<HTMLSelectElement>("#dumpFile");
-  if (!select || runtimeMode() === "desktop") {
+  if (!select) {
     return;
   }
   const dumps = await listDumps();
@@ -143,7 +158,7 @@ async function render(): Promise<void> {
   try {
     const [health, loaded, defaults] = await Promise.all([getHealth(), getEngines(), getDefaults()]);
     engines = loaded;
-    const dumps = runtimeMode() === "web" ? await listDumps() : [];
+    const dumps = await listDumps();
     const initial = defaults?.engine || engines[0]?.name || "postgres";
     const conn = defaults?.connection;
     const port = conn?.port || engineInfo(initial)?.defaultPort || 5432;
@@ -151,7 +166,7 @@ async function render(): Promise<void> {
     root.innerHTML = `
       <header class="top">
         <h1>${escapeHtml(health.name ?? "just-db")}</h1>
-        <div class="meta">${escapeHtml(health.version)} · ${escapeHtml(health.mode)} · ${runtimeMode()}${health.backupsDir ? ` · ${escapeHtml(health.backupsDir)}` : ""}</div>
+        <div class="meta">${escapeHtml(health.version)} · ${escapeHtml(health.mode)}${runtimeMode() === "web" && health.backupsDir ? ` · ${escapeHtml(health.backupsDir)}` : ""}</div>
       </header>
       <p class="lede">
         Same-engine import and export for PostgreSQL and MySQL / MariaDB.
@@ -188,18 +203,21 @@ async function render(): Promise<void> {
           <label>Format
             <select id="format">${formatOptions(initial)}</select>
           </label>
-          ${
-            runtimeMode() === "web"
-              ? `<label>Existing dump<select id="dumpFile">${dumpOptions(dumps)}</select></label>`
-              : `<p class="port">Desktop uses native file dialogs for dump files.</p>`
-          }
+          <label>Existing dump
+            <select id="dumpFile">${dumpOptions(dumps)}</select>
+          </label>
         </div>
+        ${
+          runtimeMode() === "desktop" && health.backupsDir
+            ? `<p class="port">Local dumps live in ${escapeHtml(health.backupsDir)}. Export opens a save dialog; import uses the list or a file picker.</p>`
+            : ""
+        }
         <label class="check"><input id="dropExisting" type="checkbox" /> Drop existing objects on import</label>
         <div class="actions">
           <button type="button" id="btnTest">Test connection</button>
           <button type="button" id="btnExport">Export</button>
           <button type="button" id="btnImport">Import</button>
-          ${runtimeMode() === "web" ? `<button type="button" id="btnDownload">Download dump</button>` : ""}
+          ${runtimeMode() === "web" ? `<button type="button" id="btnDownload">Download dump</button>` : `<button type="button" class="ghost" id="btnOpenBackups">Open backups folder</button>`}
         </div>
         <p id="status" class="status muted">Ready.</p>
       </section>
@@ -209,6 +227,7 @@ async function render(): Promise<void> {
     document.querySelector("#btnExport")?.addEventListener("click", onExport);
     document.querySelector("#btnImport")?.addEventListener("click", onImport);
     document.querySelector("#btnDownload")?.addEventListener("click", onDownload);
+    document.querySelector("#btnOpenBackups")?.addEventListener("click", onOpenBackups);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     root.innerHTML = `<p class="error">${escapeHtml(message)}</p>`;
@@ -234,15 +253,23 @@ async function onExport(): Promise<void> {
     setStatus(`Wrote ${result.path} (${result.bytes} bytes, ${result.format}).`, "ok");
     await refreshDumps();
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error), "bad");
+    const message = error instanceof Error ? error.message : String(error);
+    setStatus(message, /cancelled/i.test(message) ? "muted" : "bad");
   }
 }
 
 async function onImport(): Promise<void> {
   const connection = readConnection();
   const format = inputValue("format") || "";
-  const fileName = inputValue("dumpFile");
+  let fileName = inputValue("dumpFile");
   const dropExisting = Boolean(document.querySelector<HTMLInputElement>("#dropExisting")?.checked);
+  if (runtimeMode() === "desktop" && !fileName) {
+    fileName = await pickOpenPath();
+    if (!fileName) {
+      setStatus("Import cancelled.");
+      return;
+    }
+  }
   if (runtimeMode() === "web" && !fileName) {
     setStatus("Select a dump file first.", "bad");
     return;
@@ -255,6 +282,16 @@ async function onImport(): Promise<void> {
   try {
     await importDump(selectedEngine(), connection, format, fileName, dropExisting);
     setStatus("Import finished.", "ok");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setStatus(message, /cancelled/i.test(message) ? "muted" : "bad");
+  }
+}
+
+async function onOpenBackups(): Promise<void> {
+  try {
+    await openBackupsDir();
+    setStatus("Opened backups folder.");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "bad");
   }

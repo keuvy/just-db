@@ -8,7 +8,9 @@
 node_modules/
 frontend/dist/assets/
 frontend/wailsjs/
+frontend/package.json.md5
 desktop/build/
+dist/
 
 # Local env and data
 .env

@@ -158,7 +158,7 @@ func registerConnFlags(fs *flag.FlagSet) connFlags {
 		host:       fs.String("host", envOr("JUSTDB_HOST", "127.0.0.1"), "database host"),
 		port:       fs.Int("port", atoiDefault(os.Getenv("JUSTDB_PORT"), 0), "database port (engine default if 0)"),
 		user:       fs.String("user", envOr("JUSTDB_USER", ""), "database user"),
-		password:   fs.String("password", "", "database password (or JUSTDB_PASSWORD / PGPASSWORD)"),
+		password:   fs.String("password", "", "database password (or JUSTDB_PASSWORD / PGPASSWORD / MYSQL_PWD)"),
 		database:   fs.String("database", envOr("JUSTDB_DATABASE", ""), "database name"),
 		sslmode:    fs.String("sslmode", envOr("JUSTDB_SSLMODE", "prefer"), "sslmode"),
 	}
@@ -176,10 +176,11 @@ func (c connFlags) connection() engine.Connection {
 		SSLMode:  *c.sslmode,
 	}
 	if cfg.Password == "" {
-		if v := os.Getenv("JUSTDB_PASSWORD"); v != "" {
-			cfg.Password = v
-		} else {
-			cfg.Password = os.Getenv("PGPASSWORD")
+		for _, key := range []string{"JUSTDB_PASSWORD", "PGPASSWORD", "MYSQL_PWD"} {
+			if v := os.Getenv(key); v != "" {
+				cfg.Password = v
+				break
+			}
 		}
 	}
 	return cfg

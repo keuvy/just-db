@@ -1,6 +1,6 @@
 # just-db
 
-Import and export **PostgreSQL** and **MySQL** databases. Same engine only: a Postgres dump restores to Postgres.
+Same-engine only: a Postgres dump restores to Postgres, a MySQL dump restores to MySQL.
 
 Two binaries share one Go engine:
 
@@ -25,7 +25,11 @@ go run ./cmd/just-db serve -listen 127.0.0.1:8080
 go run ./cmd/just-db test -engine postgres -host 127.0.0.1 -user justdb -database justdb
 go run ./cmd/just-db export -engine postgres -host 127.0.0.1 -user justdb -database justdb -format custom -out ./data/backups/app.dump
 go run ./cmd/just-db import -engine postgres -host 127.0.0.1 -user justdb -database justdb -in ./data/backups/app.dump -confirm
+go run ./cmd/just-db export -engine mysql -host 127.0.0.1 -port 3306 -user justdb -database justdb -format sql -out ./data/backups/app.sql
+go run ./cmd/just-db import -engine mysql -host 127.0.0.1 -port 3306 -user justdb -database justdb -in ./data/backups/app.sql -confirm
 ```
+
+Password: `-password`, `JUSTDB_PASSWORD`, or `PGPASSWORD` / a MySQL defaults file. Never on the `pg_dump` / `mysqldump` command line.
 
 Client tools should match the server major version (`pg_dump` 18 into PostgreSQL 18). A newer dump can fail restore on an older server.
 

@@ -20,14 +20,15 @@ if (!el) {
 const root: HTMLDivElement = el;
 root.innerHTML = `<p class="lede">Loading…</p>`;
 
-const defaultConn: Connection = {
-  host: "127.0.0.1",
-  port: 5432,
-  user: "",
-  password: "",
-  database: "",
-  sslMode: "prefer",
-};
+let engines: EngineInfo[] = [];
+
+function selectedEngine(): string {
+  return inputValue("engine") || "postgres";
+}
+
+function engineInfo(name: string): EngineInfo | undefined {
+  return engines.find((item) => item.name === name);
+}
 
 function toolRow(label: string, tool: Tool): string {
   if (!tool.found) {
@@ -75,10 +76,20 @@ function dumpOptions(dumps: DumpFile[]): string {
     .join("");
 }
 
+function formatOptions(engine: string): string {
+  if (engine === "mysql") {
+    return `<option value="sql">sql (.sql)</option>`;
+  }
+  return `
+    <option value="custom">custom (.dump)</option>
+    <option value="sql">sql (.sql)</option>
+  `;
+}
+
 function readConnection(): Connection {
   return {
     host: inputValue("host"),
-    port: Number(inputValue("port") || "5432"),
+    port: Number(inputValue("port") || String(engineInfo(selectedEngine())?.defaultPort ?? 5432)),
     user: inputValue("user"),
     password: inputValue("password"),
     database: inputValue("database"),
@@ -109,28 +120,56 @@ async function refreshDumps(): Promise<void> {
   select.innerHTML = dumpOptions(dumps);
 }
 
+function onEngineChange(): void {
+  const name = selectedEngine();
+  const info = engineInfo(name);
+  const port = document.querySelector<HTMLInputElement>("#port");
+  if (port && info) {
+    port.value = String(info.defaultPort);
+  }
+  const format = document.querySelector<HTMLSelectElement>("#format");
+  if (format) {
+    format.innerHTML = formatOptions(name);
+  }
+  const title = document.querySelector("#workbenchTitle");
+  if (title && info) {
+    title.textContent = info.displayName;
+  }
+}
+
 async function render(): Promise<void> {
   try {
-    const [health, engines] = await Promise.all([getHealth(), getEngines()]);
+    const [health, loaded] = await Promise.all([getHealth(), getEngines()]);
+    engines = loaded;
     const dumps = runtimeMode() === "web" ? await listDumps() : [];
-    const postgres = engines.find((item) => item.name === "postgres");
-    const port = postgres?.defaultPort ?? defaultConn.port;
+    const initial = engines[0]?.name ?? "postgres";
+    const port = engineInfo(initial)?.defaultPort ?? 5432;
     root.innerHTML = `
       <header class="top">
         <h1>${escapeHtml(health.name ?? "just-db")}</h1>
         <div class="meta">${escapeHtml(health.version)} · ${escapeHtml(health.mode)} · ${runtimeMode()}</div>
       </header>
       <p class="lede">
-        Same-engine import and export. PostgreSQL dump/restore is live; MySQL follows in the next phase.
+        Same-engine import and export for PostgreSQL and MySQL / MariaDB.
+        Passwords are passed to client tools through a defaults file or environment, never on the command line.
       </p>
       <section class="grid">
         ${engines.map(engineCard).join("")}
       </section>
       <section class="card workbench">
-        <h2>PostgreSQL</h2>
-        <p class="port">Passwords are passed to client tools through the environment, never on the command line.</p>
+        <h2 id="workbenchTitle">${escapeHtml(engineInfo(initial)?.displayName ?? "PostgreSQL")}</h2>
         <div class="form-grid">
-          ${field("host", "Host", "text", defaultConn.host)}
+          <label>Engine
+            <select id="engine">
+              ${engines
+                .map(
+                  (item) =>
+                    `<option value="${escapeHtml(item.name)}">${escapeHtml(item.displayName)}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+          ${field("host", "Host", "text", "127.0.0.1")}
           ${field("port", "Port", "number", port)}
           ${field("user", "User", "text", "")}
           ${field("password", "Password", "password", "")}
@@ -143,10 +182,7 @@ async function render(): Promise<void> {
             </select>
           </label>
           <label>Format
-            <select id="format">
-              <option value="custom">custom (.dump)</option>
-              <option value="sql">sql (.sql)</option>
-            </select>
+            <select id="format">${formatOptions(initial)}</select>
           </label>
           ${
             runtimeMode() === "web"
@@ -163,6 +199,7 @@ async function render(): Promise<void> {
         <p id="status" class="status muted">Ready.</p>
       </section>
     `;
+    document.querySelector("#engine")?.addEventListener("change", onEngineChange);
     document.querySelector("#btnTest")?.addEventListener("click", onTest);
     document.querySelector("#btnExport")?.addEventListener("click", onExport);
     document.querySelector("#btnImport")?.addEventListener("click", onImport);
@@ -175,7 +212,7 @@ async function render(): Promise<void> {
 async function onTest(): Promise<void> {
   setStatus("Testing…");
   try {
-    await testConnection("postgres", readConnection());
+    await testConnection(selectedEngine(), readConnection());
     setStatus("Connection succeeded.", "ok");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "bad");
@@ -184,10 +221,10 @@ async function onTest(): Promise<void> {
 
 async function onExport(): Promise<void> {
   const connection = readConnection();
-  const format = inputValue("format") || "custom";
+  const format = inputValue("format") || (selectedEngine() === "mysql" ? "sql" : "custom");
   setStatus("Exporting…");
   try {
-    const result = await exportDump("postgres", connection, format, "");
+    const result = await exportDump(selectedEngine(), connection, format, "");
     setStatus(`Wrote ${result.path} (${result.bytes} bytes, ${result.format}).`, "ok");
     await refreshDumps();
   } catch (error) {
@@ -210,7 +247,7 @@ async function onImport(): Promise<void> {
   }
   setStatus("Importing…");
   try {
-    await importDump("postgres", connection, format, fileName, dropExisting);
+    await importDump(selectedEngine(), connection, format, fileName, dropExisting);
     setStatus("Import finished.", "ok");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "bad");

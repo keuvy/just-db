@@ -90,6 +90,24 @@ func InferFormat(path, explicit string) string {
 	}
 }
 
+func DefaultFormat(name Name) string {
+	if name == MySQL {
+		return FormatSQL
+	}
+	return FormatCustom
+}
+
+func CoerceFormat(name Name, format string) string {
+	format = strings.ToLower(strings.TrimSpace(format))
+	if name == MySQL && (format == "" || format == FormatCustom) {
+		return FormatSQL
+	}
+	if format == "" {
+		return DefaultFormat(name)
+	}
+	return format
+}
+
 type Tool struct {
 	Name    string `json:"name"`
 	Path    string `json:"path,omitempty"`

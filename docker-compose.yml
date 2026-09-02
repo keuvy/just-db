@@ -19,5 +19,16 @@ services:
     ports:
       - "127.0.0.1:55432:5432"
 
+  mysql:
+    profiles: ["test"]
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: justdb
+      MYSQL_USER: justdb
+      MYSQL_PASSWORD: justdb
+      MYSQL_DATABASE: justdb
+    ports:
+      - "127.0.0.1:33060:3306"
+
 volumes:
   justdb-data:

@@ -51,10 +51,7 @@ func ExportToFile(ctx context.Context, eng engine.Engine, cfg engine.Connection,
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return engine.ExportResult{}, err
 	}
-	format := engine.InferFormat(path, opts.Format)
-	if format == "" {
-		format = engine.FormatCustom
-	}
+	format := engine.CoerceFormat(eng.Name(), engine.InferFormat(path, opts.Format))
 	opts.Format = format
 	file, err := os.Create(path)
 	if err != nil {
@@ -77,7 +74,7 @@ func ImportFromFile(ctx context.Context, eng engine.Engine, cfg engine.Connectio
 	if !opts.Confirm {
 		return engine.ErrImportNotConfirmed
 	}
-	format := engine.InferFormat(path, opts.Format)
+	format := engine.CoerceFormat(eng.Name(), engine.InferFormat(path, opts.Format))
 	if format == "" {
 		return fmt.Errorf("%w: cannot infer format from %s", engine.ErrUnsupportedFormat, path)
 	}

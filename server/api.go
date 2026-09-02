@@ -72,10 +72,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	format := engine.InferFormat(req.FileName, req.Format)
-	if format == "" {
-		format = engine.FormatCustom
-	}
+	format := engine.CoerceFormat(eng.Name(), engine.InferFormat(req.FileName, req.Format))
 	name := req.FileName
 	if strings.TrimSpace(name) == "" {
 		name = job.DefaultFileName(eng.Name(), req.Connection.Database, format)

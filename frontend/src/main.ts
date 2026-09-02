@@ -1,6 +1,8 @@
 import "./style.css";
 import {
+  dumpDownloadURL,
   exportDump,
+  getDefaults,
   getEngines,
   getHealth,
   importDump,
@@ -139,15 +141,17 @@ function onEngineChange(): void {
 
 async function render(): Promise<void> {
   try {
-    const [health, loaded] = await Promise.all([getHealth(), getEngines()]);
+    const [health, loaded, defaults] = await Promise.all([getHealth(), getEngines(), getDefaults()]);
     engines = loaded;
     const dumps = runtimeMode() === "web" ? await listDumps() : [];
-    const initial = engines[0]?.name ?? "postgres";
-    const port = engineInfo(initial)?.defaultPort ?? 5432;
+    const initial = defaults?.engine || engines[0]?.name || "postgres";
+    const conn = defaults?.connection;
+    const port = conn?.port || engineInfo(initial)?.defaultPort || 5432;
+    const ssl = conn?.sslMode || "prefer";
     root.innerHTML = `
       <header class="top">
         <h1>${escapeHtml(health.name ?? "just-db")}</h1>
-        <div class="meta">${escapeHtml(health.version)} · ${escapeHtml(health.mode)} · ${runtimeMode()}</div>
+        <div class="meta">${escapeHtml(health.version)} · ${escapeHtml(health.mode)} · ${runtimeMode()}${health.backupsDir ? ` · ${escapeHtml(health.backupsDir)}` : ""}</div>
       </header>
       <p class="lede">
         Same-engine import and export for PostgreSQL and MySQL / MariaDB.
@@ -162,23 +166,23 @@ async function render(): Promise<void> {
           <label>Engine
             <select id="engine">
               ${engines
-                .map(
-                  (item) =>
-                    `<option value="${escapeHtml(item.name)}">${escapeHtml(item.displayName)}</option>`,
-                )
+                .map((item) => {
+                  const selected = item.name === initial ? " selected" : "";
+                  return `<option value="${escapeHtml(item.name)}"${selected}>${escapeHtml(item.displayName)}</option>`;
+                })
                 .join("")}
             </select>
           </label>
-          ${field("host", "Host", "text", "127.0.0.1")}
+          ${field("host", "Host", "text", conn?.host || "127.0.0.1")}
           ${field("port", "Port", "number", port)}
-          ${field("user", "User", "text", "")}
-          ${field("password", "Password", "password", "")}
-          ${field("database", "Database", "text", "")}
+          ${field("user", "User", "text", conn?.user || "")}
+          ${field("password", "Password", "password", conn?.password || "")}
+          ${field("database", "Database", "text", conn?.database || "")}
           <label>SSL mode
             <select id="sslMode">
-              <option value="prefer">prefer</option>
-              <option value="disable">disable</option>
-              <option value="require">require</option>
+              <option value="prefer"${ssl === "prefer" ? " selected" : ""}>prefer</option>
+              <option value="disable"${ssl === "disable" ? " selected" : ""}>disable</option>
+              <option value="require"${ssl === "require" ? " selected" : ""}>require</option>
             </select>
           </label>
           <label>Format
@@ -195,6 +199,7 @@ async function render(): Promise<void> {
           <button type="button" id="btnTest">Test connection</button>
           <button type="button" id="btnExport">Export</button>
           <button type="button" id="btnImport">Import</button>
+          ${runtimeMode() === "web" ? `<button type="button" id="btnDownload">Download dump</button>` : ""}
         </div>
         <p id="status" class="status muted">Ready.</p>
       </section>
@@ -203,6 +208,7 @@ async function render(): Promise<void> {
     document.querySelector("#btnTest")?.addEventListener("click", onTest);
     document.querySelector("#btnExport")?.addEventListener("click", onExport);
     document.querySelector("#btnImport")?.addEventListener("click", onImport);
+    document.querySelector("#btnDownload")?.addEventListener("click", onDownload);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     root.innerHTML = `<p class="error">${escapeHtml(message)}</p>`;
@@ -252,6 +258,15 @@ async function onImport(): Promise<void> {
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), "bad");
   }
+}
+
+function onDownload(): void {
+  const fileName = inputValue("dumpFile");
+  if (!fileName) {
+    setStatus("Select a dump file first.", "bad");
+    return;
+  }
+  window.location.href = dumpDownloadURL(fileName);
 }
 
 void render();

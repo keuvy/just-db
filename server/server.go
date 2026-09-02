@@ -12,13 +12,18 @@ import (
 
 	"just-db/internal/appmeta"
 	"just-db/internal/engine"
+	"just-db/internal/job"
 	"just-db/internal/registry"
 )
 
 type Options struct {
-	Listen  string
-	DataDir string
-	UIDir   string
+	Listen        string
+	DataDir       string
+	UIDir         string
+	AuthUser      string
+	AuthPassword  string
+	DefaultEngine engine.Name
+	DefaultConn   engine.Connection
 }
 
 type Server struct {
@@ -34,6 +39,13 @@ func New(opts Options) *Server {
 	if opts.DataDir == "" {
 		opts.DataDir = "./data"
 	}
+	if opts.DefaultEngine == "" {
+		eng, conn := DefaultsFromEnv()
+		opts.DefaultEngine = eng
+		if opts.DefaultConn == (engine.Connection{}) {
+			opts.DefaultConn = conn
+		}
+	}
 	s := &Server{opts: opts, reg: registry.New(), mux: http.NewServeMux()}
 	s.routes()
 	return s
@@ -47,6 +59,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/health", s.handleHealth)
 	s.mux.HandleFunc("GET /api/engines", s.handleEngines)
 	s.mux.HandleFunc("GET /api/tools", s.handleEngines)
+	s.mux.HandleFunc("GET /api/defaults", s.handleDefaults)
+	s.mux.HandleFunc("GET /api/dumps/{name}", s.handleDumpDownload)
 	s.mux.HandleFunc("GET /api/dumps", s.handleDumps)
 	s.mux.HandleFunc("POST /api/test-connection", s.handleTestConnection)
 	s.mux.HandleFunc("POST /api/export", s.handleExport)
@@ -54,16 +68,20 @@ func (s *Server) routes() {
 	s.mux.Handle("/", s.uiHandler())
 }
 
-func (s *Server) Handler() http.Handler { return s.mux }
+func (s *Server) Handler() http.Handler { return s.withAuth(s.mux) }
 
 func (s *Server) ListenAndServe() error {
-	if err := os.MkdirAll(s.opts.DataDir, 0o755); err != nil {
+	if err := os.MkdirAll(job.BackupsDir(s.opts.DataDir), 0o755); err != nil {
 		return err
 	}
-	log.Printf("%s %s listening on %s (data %s)", appmeta.Name, appmeta.Version, s.opts.Listen, s.opts.DataDir)
+	auth := "off"
+	if s.authEnabled() {
+		auth = "basic user=" + s.opts.AuthUser
+	}
+	log.Printf("%s %s listening on %s (data %s, backups %s, auth %s)", appmeta.Name, appmeta.Version, s.opts.Listen, s.opts.DataDir, job.BackupsDir(s.opts.DataDir), auth)
 	srv := &http.Server{
 		Addr:              s.opts.Listen,
-		Handler:           s.mux,
+		Handler:           s.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	return srv.ListenAndServe()
@@ -71,11 +89,12 @@ func (s *Server) ListenAndServe() error {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status":  "ok",
-		"name":    appmeta.Name,
-		"version": appmeta.Version,
-		"mode":    "server",
-		"dataDir": s.opts.DataDir,
+		"status":     "ok",
+		"name":       appmeta.Name,
+		"version":    appmeta.Version,
+		"mode":       "server",
+		"dataDir":    s.opts.DataDir,
+		"backupsDir": job.BackupsDir(s.opts.DataDir),
 	})
 }
 

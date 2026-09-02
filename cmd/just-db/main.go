@@ -49,10 +49,21 @@ func cmdServe(args []string) error {
 	listen := fs.String("listen", envOr("JUSTDB_LISTEN", "0.0.0.0:8080"), "listen address")
 	data := fs.String("data", envOr("JUSTDB_DATA", "./data"), "data directory for dumps and profiles")
 	ui := fs.String("ui", envOr("JUSTDB_UI_DIR", "frontend/dist"), "directory of built frontend assets")
+	authUser := fs.String("auth-user", envOr("JUSTDB_AUTH_USER", ""), "HTTP basic auth user (empty disables auth)")
+	authPassword := fs.String("auth-password", envOr("JUSTDB_AUTH_PASSWORD", ""), "HTTP basic auth password")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	return server.New(server.Options{Listen: *listen, DataDir: *data, UIDir: *ui}).ListenAndServe()
+	engineName, conn := server.DefaultsFromEnv()
+	return server.New(server.Options{
+		Listen:        *listen,
+		DataDir:       *data,
+		UIDir:         *ui,
+		AuthUser:      *authUser,
+		AuthPassword:  *authPassword,
+		DefaultEngine: engineName,
+		DefaultConn:   conn,
+	}).ListenAndServe()
 }
 
 func cmdTools() error {

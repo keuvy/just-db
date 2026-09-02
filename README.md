@@ -49,11 +49,14 @@ cd desktop && wails dev
 
 ## EasyPanel
 
-Build and run the Docker image. Mount a volume at `/data`, route the domain to port **8080**, and put this service in the same project as your databases so it can reach `*_postgres:5432` / `*_mysql:3306`.
+Step-by-step: [docs/easypanel.md](docs/easypanel.md).
+
+Same project as the database, domain to port **8080**, volume `/data`. Optional basic auth: `JUSTDB_AUTH_USER` / `JUSTDB_AUTH_PASSWORD`. Prefill the UI with `JUSTDB_ENGINE`, `JUSTDB_HOST`, `JUSTDB_USER`, `JUSTDB_PASSWORD`, `JUSTDB_DATABASE`.
 
 ```bash
 docker build -t just-db .
-docker run --rm -p 8080:8080 -v justdb-data:/data just-db
+docker run --rm -p 8080:8080 -v justdb-data:/data \
+  -e JUSTDB_AUTH_USER=admin \
+  -e JUSTDB_AUTH_PASSWORD=secret \
+  just-db
 ```
-
-Environment: `JUSTDB_LISTEN`, `JUSTDB_DATA`, `JUSTDB_UI_DIR`.

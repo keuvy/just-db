@@ -20,6 +20,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/just-db /usr/local/bin/just-db
 COPY --from=ui /src/dist /usr/share/just-db/ui
+RUN mkdir -p /data/backups
 ENV JUSTDB_LISTEN=0.0.0.0:8080 \
     JUSTDB_DATA=/data \
     JUSTDB_UI_DIR=/usr/share/just-db/ui

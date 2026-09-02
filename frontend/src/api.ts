@@ -23,6 +23,15 @@ export type Health = {
   version: string;
   mode: string;
   dataDir?: string;
+  backupsDir?: string;
+};
+
+export type Defaults = {
+  engine: string;
+  connection: Connection;
+  dataDir: string;
+  backupsDir: string;
+  auth: boolean;
 };
 
 export type Connection = {
@@ -195,6 +204,21 @@ export async function importDump(
   if (!response.ok) {
     throw new Error(await readError(response));
   }
+}
+
+export async function getDefaults(): Promise<Defaults | null> {
+  if (runtimeMode() === "desktop") {
+    return null;
+  }
+  const response = await fetch("/api/defaults");
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json();
+}
+
+export function dumpDownloadURL(name: string): string {
+  return `/api/dumps/${encodeURIComponent(name)}`;
 }
 
 export async function listDumps(): Promise<DumpFile[]> {

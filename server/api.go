@@ -120,6 +120,20 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (s *Server) handleDumpDownload(w http.ResponseWriter, r *http.Request) {
+	path, err := s.dumpPath(r.PathValue("name"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if _, err := os.Stat(path); err != nil {
+		writeError(w, statusFor(err), err)
+		return
+	}
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(path)+`"`)
+	http.ServeFile(w, r, path)
+}
+
 func (s *Server) handleDumps(w http.ResponseWriter, r *http.Request) {
 	dumps, err := job.ListDumps(job.BackupsDir(s.opts.DataDir))
 	if err != nil {

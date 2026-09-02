@@ -8,6 +8,15 @@ services:
     environment:
       JUSTDB_LISTEN: 0.0.0.0:8080
       JUSTDB_DATA: /data
+      JUSTDB_AUTH_USER: ${JUSTDB_AUTH_USER:-}
+      JUSTDB_AUTH_PASSWORD: ${JUSTDB_AUTH_PASSWORD:-}
+      JUSTDB_ENGINE: ${JUSTDB_ENGINE:-postgres}
+      JUSTDB_HOST: ${JUSTDB_HOST:-}
+      JUSTDB_PORT: ${JUSTDB_PORT:-}
+      JUSTDB_USER: ${JUSTDB_USER:-}
+      JUSTDB_PASSWORD: ${JUSTDB_PASSWORD:-}
+      JUSTDB_DATABASE: ${JUSTDB_DATABASE:-}
+      JUSTDB_SSLMODE: ${JUSTDB_SSLMODE:-disable}
 
   postgres:
     profiles: ["test"]

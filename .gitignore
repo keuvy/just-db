@@ -16,3 +16,8 @@ dist/
 .env
 .data/
 /data/
+
+# Graphify generated metadata/cache
+graphify-out/cache/
+graphify-out/manifest.json
+graphify-out/cost.json

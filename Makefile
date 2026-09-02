@@ -11,7 +11,7 @@ tools:
 	$(GO) run ./cmd/just-db tools
 
 test:
-	$(GO) test ./...
+	$(GO) test ./... -count=1 -timeout 4m
 
 frontend:
 	npm --prefix frontend install

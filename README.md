@@ -22,7 +22,12 @@ SQLite is intentionally not in v1.
 go run ./cmd/just-db version
 go run ./cmd/just-db tools
 go run ./cmd/just-db serve -listen 127.0.0.1:8080
+go run ./cmd/just-db test -engine postgres -host 127.0.0.1 -user justdb -database justdb
+go run ./cmd/just-db export -engine postgres -host 127.0.0.1 -user justdb -database justdb -format custom -out ./data/backups/app.dump
+go run ./cmd/just-db import -engine postgres -host 127.0.0.1 -user justdb -database justdb -in ./data/backups/app.dump -confirm
 ```
+
+Client tools should match the server major version (`pg_dump` 18 into PostgreSQL 18). A newer dump can fail restore on an older server.
 
 ```bash
 make test

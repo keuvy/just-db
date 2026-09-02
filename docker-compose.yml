@@ -9,5 +9,15 @@ services:
       JUSTDB_LISTEN: 0.0.0.0:8080
       JUSTDB_DATA: /data
 
+  postgres:
+    profiles: ["test"]
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: justdb
+      POSTGRES_PASSWORD: justdb
+      POSTGRES_DB: justdb
+    ports:
+      - "127.0.0.1:55432:5432"
+
 volumes:
   justdb-data:

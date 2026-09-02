@@ -47,6 +47,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/health", s.handleHealth)
 	s.mux.HandleFunc("GET /api/engines", s.handleEngines)
 	s.mux.HandleFunc("GET /api/tools", s.handleEngines)
+	s.mux.HandleFunc("GET /api/dumps", s.handleDumps)
+	s.mux.HandleFunc("POST /api/test-connection", s.handleTestConnection)
+	s.mux.HandleFunc("POST /api/export", s.handleExport)
+	s.mux.HandleFunc("POST /api/import", s.handleImport)
 	s.mux.Handle("/", s.uiHandler())
 }
 

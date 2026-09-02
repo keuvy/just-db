@@ -25,9 +25,47 @@ export type Health = {
   dataDir?: string;
 };
 
+export type Connection = {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+  sslMode: string;
+};
+
+export type DumpFile = {
+  name: string;
+  path: string;
+  size: number;
+  modTime: string;
+};
+
+export type ExportResult = {
+  path: string;
+  bytes: number;
+  format: string;
+};
+
 type WailsApp = {
   Health: () => Promise<Health>;
   Engines: () => Promise<EngineInfo[]>;
+  TestConnection: (name: string, cfg: Connection) => Promise<void>;
+  Export: (
+    name: string,
+    cfg: Connection,
+    opts: { format: string },
+    destPath: string,
+  ) => Promise<ExportResult>;
+  ImportDump: (
+    name: string,
+    cfg: Connection,
+    opts: { format: string; dropExisting: boolean; confirm: boolean },
+    srcPath: string,
+  ) => Promise<void>;
+  ListDumps: (dir: string) => Promise<DumpFile[]>;
+  PickSavePath: (defaultName: string) => Promise<string>;
+  PickOpenPath: () => Promise<string>;
 };
 
 function wailsApp(): WailsApp | undefined {
@@ -41,6 +79,18 @@ export function runtimeMode(): "desktop" | "web" {
   return wailsApp() ? "desktop" : "web";
 }
 
+async function readError(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { error?: string };
+    if (body.error) {
+      return body.error;
+    }
+  } catch {
+    // fall through
+  }
+  return `${response.status} ${response.statusText}`;
+}
+
 export async function getHealth(): Promise<Health> {
   const app = wailsApp();
   if (app?.Health) {
@@ -48,7 +98,7 @@ export async function getHealth(): Promise<Health> {
   }
   const response = await fetch("/api/health");
   if (!response.ok) {
-    throw new Error(`health failed: ${response.status}`);
+    throw new Error(await readError(response));
   }
   return response.json();
 }
@@ -60,8 +110,105 @@ export async function getEngines(): Promise<EngineInfo[]> {
   }
   const response = await fetch("/api/engines");
   if (!response.ok) {
-    throw new Error(`engines failed: ${response.status}`);
+    throw new Error(await readError(response));
   }
   const body = (await response.json()) as { engines: EngineInfo[] };
   return body.engines;
+}
+
+export async function testConnection(engine: string, connection: Connection): Promise<void> {
+  const app = wailsApp();
+  if (app?.TestConnection) {
+    await app.TestConnection(engine, connection);
+    return;
+  }
+  const response = await fetch("/api/test-connection", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ engine, connection }),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+}
+
+export async function exportDump(
+  engine: string,
+  connection: Connection,
+  format: string,
+  fileName: string,
+): Promise<ExportResult> {
+  const app = wailsApp();
+  if (app?.Export) {
+    let dest = fileName;
+    if (app.PickSavePath) {
+      const picked = await app.PickSavePath(fileName);
+      if (!picked) {
+        throw new Error("save cancelled");
+      }
+      dest = picked;
+    }
+    return app.Export(engine, connection, { format }, dest);
+  }
+  const response = await fetch("/api/export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ engine, connection, format, fileName }),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json();
+}
+
+export async function importDump(
+  engine: string,
+  connection: Connection,
+  format: string,
+  fileName: string,
+  dropExisting: boolean,
+): Promise<void> {
+  const app = wailsApp();
+  if (app?.ImportDump) {
+    let src = fileName;
+    if (!src && app.PickOpenPath) {
+      src = await app.PickOpenPath();
+    }
+    if (!src) {
+      throw new Error("open cancelled");
+    }
+    await app.ImportDump(engine, connection, { format, dropExisting, confirm: true }, src);
+    return;
+  }
+  const response = await fetch("/api/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      engine,
+      connection,
+      format,
+      fileName,
+      dropExisting,
+      confirm: true,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+}
+
+export async function listDumps(): Promise<DumpFile[]> {
+  const app = wailsApp();
+  if (app?.ListDumps && !app.PickOpenPath) {
+    return app.ListDumps("");
+  }
+  if (runtimeMode() === "desktop") {
+    return [];
+  }
+  const response = await fetch("/api/dumps");
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  const body = (await response.json()) as { dumps: DumpFile[] };
+  return body.dumps ?? [];
 }

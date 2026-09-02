@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -40,5 +41,37 @@ func TestEngines(t *testing.T) {
 	}
 	if len(body.Engines) != 2 {
 		t.Fatalf("got %d engines", len(body.Engines))
+	}
+}
+
+func TestImportRequiresConfirm(t *testing.T) {
+	srv := New(Options{DataDir: t.TempDir()})
+	body := strings.NewReader(`{"engine":"postgres","connection":{"user":"u","database":"d"},"fileName":"x.dump","confirm":false}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/import", body)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUnknownEngine(t *testing.T) {
+	srv := New(Options{DataDir: t.TempDir()})
+	body := strings.NewReader(`{"engine":"sqlite","connection":{"user":"u","database":"d"}}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/test-connection", body)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest && rec.Code != http.StatusNotFound {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDumpsEmpty(t *testing.T) {
+	srv := New(Options{DataDir: t.TempDir()})
+	req := httptest.NewRequest(http.MethodGet, "/api/dumps", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 	}
 }

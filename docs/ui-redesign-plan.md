@@ -1,6 +1,6 @@
 # just-db UI redesign plan
 
-Proposed direction, 2026-09-04. This is a plan for replacing the shared web and Wails interface. Implementation has not started.
+Design record, 2026-09-04. The shared web and Wails interface has been implemented from this plan. See [UI guide and verification](ui.md) for the delivered behavior, screenshots, and remaining runtime checks. The audit below describes the interface before the redesign.
 
 Rebuild just-db around a persistent profile sidebar and a focused database workspace. Give profile management, export, restore, dumps, and tool diagnostics their own clear places. Use the window efficiently and keep the selected target visible whenever an operation can affect it.
 
@@ -290,4 +290,4 @@ Required verification during implementation:
 - Confirm that operation status survives in-app navigation, that successful export is distinct from saving a copy, and that errors never imply rollback or cancellation the backend cannot prove.
 - Run `git diff --check` and inspect the source/build diff. Do not stage, unstage, or overwrite unrelated work as part of the redesign.
 
-This planning pass executed no application builds, tests, database operations, or UI implementation changes. The next concrete deliverable is the fixture-based visual prototype in phase 1.
+The original planning pass was read-only. Implementation and verification are recorded separately in [the UI guide](ui.md); this document retains the design rationale and intended acceptance criteria.

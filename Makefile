@@ -8,12 +8,9 @@ NFPM ?= nfpm
 VERSION ?= 0.1.0
 
 # Fedora 40+ / Debian with WebKitGTK 4.1 need this Wails build tag.
+# Skip the probe when pkg-config is missing so `make serve` stays quiet on macOS.
 ifeq ($(origin WAILS_TAGS), undefined)
-  ifeq ($(shell pkg-config --exists webkit2gtk-4.1 && echo yes),yes)
-    WAILS_TAGS := webkit2_41
-  else
-    WAILS_TAGS :=
-  endif
+  WAILS_TAGS := $(shell command -v pkg-config >/dev/null 2>&1 && pkg-config --exists webkit2gtk-4.1 && echo webkit2_41)
 endif
 
 serve:

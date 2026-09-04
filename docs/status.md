@@ -124,8 +124,14 @@ Same UI as the web app. Detects Wails (`window.go.main.App`) vs HTTP.
 
 ## Frontend
 
-Vanilla TypeScript: engine switch, connection form, saved profiles, test / export / import. Export creates and downloads a dump. The Dumps tab lists saved files with Download and Delete actions. Import asks for a local file. Desktop uses native save dialogs for downloads and can open the backups folder.
+The shared vanilla TypeScript interface uses a persistent profile sidebar, a database workspace with Export and Restore modes, a searchable dump library, and Tools & settings. New/Edit profile opens a side sheet. A profile's optional default database stays separate from the database selected for an operation.
+
+Restore accepts a local file or a stored dump and requires source, target, and final review. SQL files require an engine acknowledgment; drop-existing also requires typing the target database name. Export creates a dump before attempting the browser download or native save dialog. Session activity preserves the captured target and separates dump creation from saving a copy.
+
+The UI includes light, dark, and system appearance, responsive navigation, manual database entry when discovery fails, and contextual tool diagnostics. See [UI guide and screenshots](ui.md).
 
 ## Tests
 
 `make test` (`go test ./...`). Postgres roundtrip uses `postgres:18-alpine` (Podman/Docker). MySQL roundtrip uses `mysql:8.4`.
+
+In `frontend/`, `npm test` runs the focused state, operation, interaction, and HTTP-payload tests; `npm run build` checks TypeScript and builds the production assets. The sample preview is available only through the Vite development server with `?preview`.

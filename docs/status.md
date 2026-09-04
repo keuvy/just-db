@@ -22,8 +22,9 @@ How to run and deploy: [README](../README.md), [EasyPanel](easypanel.md), [deskt
 | 2 MySQL / MariaDB | `mysqldump` / `mysql` (MariaDB names too), SQL only, roundtrip tests |
 | 3 EasyPanel | HTTP API, basic auth, `/data` volume, env prefill, docs |
 | 4 Native desktop | Wails app, XDG/mac data dir, native dialogs, `.desktop` + nfpm packaging |
+| 5 Connection profiles | Named engine+connection, AES-GCM at rest, CLI / HTTP / desktop / UI |
 
-Not built (later): scheduled backups, encrypted connection profiles, SQLite.
+Not built (later): scheduled backups, SQLite.
 
 ## Layout
 
@@ -37,6 +38,7 @@ internal/
   proc/                subprocess runner
   tools/               LookPath (including Homebrew / pgsql dirs)
   registry/            postgres + mysql
+  profile/             encrypted named connections
   appdir/              desktop data dir + backups/
   appmeta/             name + version
 server/                HTTP API + basic auth + env defaults
@@ -73,12 +75,17 @@ docker-compose.yml     app + optional postgres:18 / mysql:8.4 test profiles
 just-db version
 just-db tools
 just-db serve [-listen] [-data] [-ui] [-auth-user] [-auth-password]
-just-db test  -engine postgres|mysql …
-just-db export -engine … -out <path> [-format sql|custom]
-just-db import -engine … -in <path> -confirm [-drop] [-format]
+just-db profile list|save|show|delete [-data]
+just-db test  -engine postgres|mysql …   or  -profile NAME
+just-db export -engine … -out <path> [-format sql|custom]   or  -profile NAME
+just-db import -engine … -in <path> -confirm [-drop] [-format]   or  -profile NAME
 ```
 
 Password: `-password`, `JUSTDB_PASSWORD`, `PGPASSWORD`, or `MYSQL_PWD`.
+
+Profiles live under `{dataDir}/profiles/`. Name is the identity (`prod`, `shop-mysql`). `just-db profile show` hides the password unless `-include-password`. `test` / `export` / `import` take `-profile`; any connection flag you also pass overrides the stored field.
+
+Encryption key: `JUSTDB_PROFILES_KEY` (64 hex chars, or any passphrase hashed with SHA-256). If unset, just-db writes a 32-byte key file at `{dataDir}/profiles/key` (mode 0600). Set the env var on EasyPanel so the volume holds ciphertext only.
 
 ## HTTP (`just-db serve`)
 
@@ -89,6 +96,10 @@ Listen default in the image: `0.0.0.0:8080`. Dumps live under `{dataDir}/backups
 | GET | `/health`, `/api/health` | public even when basic auth is on |
 | GET | `/api/engines`, `/api/defaults`, `/api/dumps` | protected if auth is set |
 | GET | `/api/dumps/{name}` | download |
+| GET | `/api/profiles` | list (no passwords) |
+| GET | `/api/profiles/{name}` | full record, including password |
+| PUT | `/api/profiles/{name}` | create or replace |
+| DELETE | `/api/profiles/{name}` | |
 | POST | `/api/test-connection`, `/api/export`, `/api/import` | import needs `confirm: true` |
 
 Basic auth: `JUSTDB_AUTH_USER` / `JUSTDB_AUTH_PASSWORD`.
@@ -102,6 +113,7 @@ Docker volume: `/data`. Health check: `GET /health`.
 Same UI as the web app. Detects Wails (`window.go.main.App`) vs HTTP.
 
 - Data dir: `$XDG_DATA_HOME/just-db` or `~/.local/share/just-db` (Linux); `~/Library/Application Support/just-db` (macOS)
+- Profiles: `{dataDir}/profiles/*.jdb` (encrypted). CLI `-data` defaults to `./data`, so desktop and CLI do not share profiles unless you point them at the same directory.
 - Export: native save dialog, default filename like `postgres-app-20260901-201500.dump`
 - Import: dump list from the backups folder, or a file picker
 - Window title **just-db**; process / `.desktop` / package name **just-db-desktop**
@@ -111,7 +123,7 @@ Same UI as the web app. Detects Wails (`window.go.main.App`) vs HTTP.
 
 ## Frontend
 
-Vanilla TypeScript: engine switch, connection form, test / export / import, dump list. Web can download dumps. Desktop uses native dialogs and can open the backups folder.
+Vanilla TypeScript: engine switch, connection form, saved profiles, test / export / import, dump list. Web can download dumps. Desktop uses native dialogs and can open the backups folder.
 
 ## Tests
 

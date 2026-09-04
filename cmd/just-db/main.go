@@ -23,7 +23,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: %s <serve|tools|test|export|import|version>", appmeta.Name)
+		return fmt.Errorf("usage: %s <serve|tools|test|export|import|profile|version>", appmeta.Name)
 	}
 	switch args[0] {
 	case "serve":
@@ -36,6 +36,8 @@ func run(args []string) error {
 		return cmdExport(args[1:])
 	case "import":
 		return cmdImport(args[1:])
+	case "profile":
+		return cmdProfile(args[1:])
 	case "version", "-version", "--version":
 		fmt.Printf("%s %s\n", appmeta.Name, appmeta.Version)
 		return nil
@@ -87,15 +89,21 @@ func cmdTools() error {
 
 func cmdTest(args []string) error {
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	data := registerDataFlag(fs)
+	profileName := registerProfileFlag(fs)
 	c := registerConnFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	eng, err := registry.New().Get(c.engine())
+	engName, cfg, err := resolveConn(fs, c, *data, *profileName)
 	if err != nil {
 		return err
 	}
-	if err := eng.TestConnection(context.Background(), c.connection()); err != nil {
+	eng, err := registry.New().Get(engName)
+	if err != nil {
+		return err
+	}
+	if err := eng.TestConnection(context.Background(), cfg); err != nil {
 		return err
 	}
 	fmt.Println("ok")
@@ -104,6 +112,8 @@ func cmdTest(args []string) error {
 
 func cmdExport(args []string) error {
 	fs := flag.NewFlagSet("export", flag.ContinueOnError)
+	data := registerDataFlag(fs)
+	profileName := registerProfileFlag(fs)
 	c := registerConnFlags(fs)
 	format := fs.String("format", "", "sql or custom")
 	outPath := fs.String("out", "", "output dump path")
@@ -113,11 +123,15 @@ func cmdExport(args []string) error {
 	if *outPath == "" {
 		return fmt.Errorf("-out is required")
 	}
-	eng, err := registry.New().Get(c.engine())
+	engName, cfg, err := resolveConn(fs, c, *data, *profileName)
 	if err != nil {
 		return err
 	}
-	result, err := job.ExportToFile(context.Background(), eng, c.connection(), engine.ExportOptions{Format: *format}, *outPath)
+	eng, err := registry.New().Get(engName)
+	if err != nil {
+		return err
+	}
+	result, err := job.ExportToFile(context.Background(), eng, cfg, engine.ExportOptions{Format: *format}, *outPath)
 	if err != nil {
 		return err
 	}
@@ -127,6 +141,8 @@ func cmdExport(args []string) error {
 
 func cmdImport(args []string) error {
 	fs := flag.NewFlagSet("import", flag.ContinueOnError)
+	data := registerDataFlag(fs)
+	profileName := registerProfileFlag(fs)
 	c := registerConnFlags(fs)
 	inPath := fs.String("in", "", "dump file")
 	format := fs.String("format", "", "sql or custom (inferred from file if empty)")
@@ -138,11 +154,15 @@ func cmdImport(args []string) error {
 	if *inPath == "" {
 		return fmt.Errorf("-in is required")
 	}
-	eng, err := registry.New().Get(c.engine())
+	engName, cfg, err := resolveConn(fs, c, *data, *profileName)
 	if err != nil {
 		return err
 	}
-	if err := job.ImportFromFile(context.Background(), eng, c.connection(), engine.ImportOptions{
+	eng, err := registry.New().Get(engName)
+	if err != nil {
+		return err
+	}
+	if err := job.ImportFromFile(context.Background(), eng, cfg, engine.ImportOptions{
 		Format:       *format,
 		DropExisting: *drop,
 		Confirm:      *confirm,

@@ -28,6 +28,7 @@ EasyPanel health checks can use `GET /health`. That path stays public even when 
 | `JUSTDB_PASSWORD` | | Database password (UI default) |
 | `JUSTDB_DATABASE` | `app` | Database name |
 | `JUSTDB_SSLMODE` | `disable` | Use `disable` for in-project Docker traffic |
+| `JUSTDB_PROFILES_KEY` | a long random secret | Encrypts saved profiles; if unset, a key file is written under `/data/profiles/key` |
 
 Host names are the EasyPanel **service names**, often `{project}_{service}` (for example `shop_postgres`). Check the database service hostname in the panel if a test connection fails.
 
@@ -40,9 +41,11 @@ Dumps are written under the volume:
 ```
 /data/backups/*.dump    PostgreSQL custom format
 /data/backups/*.sql     PostgreSQL or MySQL SQL
+/data/profiles/*.jdb    Encrypted connection profiles
+/data/profiles/key      Generated key (absent when JUSTDB_PROFILES_KEY is set)
 ```
 
-The UI lists those files, can restore them, and can download them. EasyPanel **volume backups** can copy `/data` to object storage as a second layer; that is a file copy, not a logical database dump.
+The UI lists those files, can restore them, and can download them. Saved profiles appear in the same UI. EasyPanel **volume backups** can copy `/data` to object storage as a second layer; that is a file copy, not a logical database dump. If you did not set `JUSTDB_PROFILES_KEY`, a volume backup also copies the profile key.
 
 ## 4. Client tools
 

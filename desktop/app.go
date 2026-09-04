@@ -12,6 +12,7 @@ import (
 	"just-db/internal/appmeta"
 	"just-db/internal/engine"
 	"just-db/internal/job"
+	"just-db/internal/profile"
 	"just-db/internal/registry"
 )
 
@@ -131,6 +132,53 @@ func (a *App) PickOpenPath() (string, error) {
 			{DisplayName: "Database dump", Pattern: "*.dump;*.sql"},
 		},
 	})
+}
+
+func (a *App) profileStore() (*profile.Store, error) {
+	root, err := appdir.Root()
+	if err != nil {
+		return nil, err
+	}
+	return profile.Open(root)
+}
+
+func (a *App) ListProfiles() ([]profile.Summary, error) {
+	st, err := a.profileStore()
+	if err != nil {
+		return nil, err
+	}
+	return st.List()
+}
+
+func (a *App) GetProfile(name string) (profile.Record, error) {
+	st, err := a.profileStore()
+	if err != nil {
+		return profile.Record{}, err
+	}
+	return st.Get(name)
+}
+
+func (a *App) PutProfile(name, engineName string, cfg engine.Connection) error {
+	if _, err := a.reg.Get(engine.Name(engineName)); err != nil {
+		return err
+	}
+	st, err := a.profileStore()
+	if err != nil {
+		return err
+	}
+	return st.Put(profile.Record{
+		Name:       name,
+		Engine:     engine.Name(engineName),
+		Connection: cfg,
+	})
+}
+
+func (a *App) DeleteProfile(name string) error {
+	st, err := a.profileStore()
+	if err != nil {
+		return err
+	}
+	return st.Delete(name)
 }
 
 func (a *App) OpenBackupsDir() error {

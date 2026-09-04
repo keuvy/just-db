@@ -44,6 +44,8 @@ Dumps default to a per-user backups folder (created on first launch):
 
 Export opens a native save dialog (default name like `postgres-app-20260901-201500.dump`). Import uses the dump list in that folder, or a file picker if nothing is selected.
 
+Saved profiles live in `{data dir}/profiles/`, encrypted. The desktop app does not use `./data`; CLI commands do unless you pass `-data` pointing at the same directory.
+
 ## Client tools
 
 just-db shells out to `pg_dump` / `pg_restore` / `psql` and `mysqldump` / `mysql` (MariaDB names work too). Install the clients that match the **server major version**. Packages are **Recommends**, not Depends — you can install only Postgres tools, only MySQL tools, or both.

@@ -50,6 +50,22 @@ export type DumpFile = {
   modTime: string;
 };
 
+export type ProfileSummary = {
+  name: string;
+  engine: string;
+  host: string;
+  port: number;
+  user: string;
+  database: string;
+  sslMode: string;
+};
+
+export type Profile = {
+  name: string;
+  engine: string;
+  connection: Connection;
+};
+
 export type ExportResult = {
   path: string;
   bytes: number;
@@ -77,6 +93,10 @@ type WailsApp = {
   PickOpenPath: () => Promise<string>;
   DefaultDumpName: (name: string, database: string, format: string) => Promise<string>;
   OpenBackupsDir: () => Promise<void>;
+  ListProfiles: () => Promise<ProfileSummary[]>;
+  GetProfile: (name: string) => Promise<Profile>;
+  PutProfile: (name: string, engineName: string, cfg: Connection) => Promise<void>;
+  DeleteProfile: (name: string) => Promise<void>;
 };
 
 function wailsApp(): WailsApp | undefined {
@@ -254,4 +274,57 @@ export async function listDumps(): Promise<DumpFile[]> {
   }
   const body = (await response.json()) as { dumps: DumpFile[] };
   return body.dumps ?? [];
+}
+
+export async function listProfiles(): Promise<ProfileSummary[]> {
+  const app = wailsApp();
+  if (app?.ListProfiles) {
+    return app.ListProfiles();
+  }
+  const response = await fetch("/api/profiles");
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  const body = (await response.json()) as { profiles: ProfileSummary[] };
+  return body.profiles ?? [];
+}
+
+export async function getProfile(name: string): Promise<Profile> {
+  const app = wailsApp();
+  if (app?.GetProfile) {
+    return app.GetProfile(name);
+  }
+  const response = await fetch(`/api/profiles/${encodeURIComponent(name)}`);
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json();
+}
+
+export async function putProfile(name: string, engine: string, connection: Connection): Promise<void> {
+  const app = wailsApp();
+  if (app?.PutProfile) {
+    await app.PutProfile(name, engine, connection);
+    return;
+  }
+  const response = await fetch(`/api/profiles/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ engine, connection }),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+}
+
+export async function deleteProfile(name: string): Promise<void> {
+  const app = wailsApp();
+  if (app?.DeleteProfile) {
+    await app.DeleteProfile(name);
+    return;
+  }
+  const response = await fetch(`/api/profiles/${encodeURIComponent(name)}`, { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
 }

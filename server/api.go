@@ -10,6 +10,7 @@ import (
 
 	"just-db/internal/engine"
 	"just-db/internal/job"
+	"just-db/internal/profile"
 )
 
 type apiConnection struct {
@@ -143,6 +144,79 @@ func (s *Server) handleDumps(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"dumps": dumps})
 }
 
+type profileBody struct {
+	Engine     engine.Name   `json:"engine"`
+	Connection apiConnection `json:"connection"`
+}
+
+func (s *Server) handleProfileList(w http.ResponseWriter, r *http.Request) {
+	st, err := profile.Open(s.opts.DataDir)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	list, err := st.List()
+	if err != nil {
+		writeError(w, statusFor(err), err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"profiles": list})
+}
+
+func (s *Server) handleProfileGet(w http.ResponseWriter, r *http.Request) {
+	st, err := profile.Open(s.opts.DataDir)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	rec, err := st.Get(r.PathValue("name"))
+	if err != nil {
+		writeError(w, statusFor(err), err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rec)
+}
+
+func (s *Server) handleProfilePut(w http.ResponseWriter, r *http.Request) {
+	var req profileBody
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if _, err := s.reg.Get(req.Engine); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	st, err := profile.Open(s.opts.DataDir)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	rec := profile.Record{
+		Name:       r.PathValue("name"),
+		Engine:     req.Engine,
+		Connection: req.Connection.toEngine(),
+	}
+	if err := st.Put(rec); err != nil {
+		writeError(w, statusFor(err), err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rec.Summary())
+}
+
+func (s *Server) handleProfileDelete(w http.ResponseWriter, r *http.Request) {
+	st, err := profile.Open(s.opts.DataDir)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if err := st.Delete(r.PathValue("name")); err != nil {
+		writeError(w, statusFor(err), err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (s *Server) dumpPath(name string) (string, error) {
 	safe, err := job.SafeFileName(name)
 	if err != nil {
@@ -173,16 +247,21 @@ func (c apiConnection) toEngine() engine.Connection {
 
 func statusFor(err error) int {
 	switch {
-	case errors.Is(err, engine.ErrUnknownEngine), errors.Is(err, os.ErrNotExist):
+	case errors.Is(err, engine.ErrUnknownEngine),
+		errors.Is(err, os.ErrNotExist),
+		errors.Is(err, profile.ErrNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, engine.ErrInvalidConnection),
 		errors.Is(err, engine.ErrUnsupportedFormat),
-		errors.Is(err, engine.ErrImportNotConfirmed):
+		errors.Is(err, engine.ErrImportNotConfirmed),
+		errors.Is(err, profile.ErrInvalidName):
 		return http.StatusBadRequest
 	case errors.Is(err, engine.ErrNotImplemented):
 		return http.StatusNotImplemented
 	case errors.Is(err, engine.ErrToolsMissing):
 		return http.StatusFailedDependency
+	case errors.Is(err, profile.ErrDecrypt):
+		return http.StatusInternalServerError
 	default:
 		return http.StatusBadGateway
 	}

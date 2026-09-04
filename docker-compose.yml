@@ -17,6 +17,7 @@ services:
       JUSTDB_PASSWORD: ${JUSTDB_PASSWORD:-}
       JUSTDB_DATABASE: ${JUSTDB_DATABASE:-}
       JUSTDB_SSLMODE: ${JUSTDB_SSLMODE:-disable}
+      JUSTDB_PROFILES_KEY: ${JUSTDB_PROFILES_KEY:-}
 
   postgres:
     profiles: ["test"]

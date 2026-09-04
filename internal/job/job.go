@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,74 @@ import (
 
 func BackupsDir(dataDir string) string {
 	return filepath.Join(dataDir, "backups")
+}
+
+var ErrInvalidDump = errors.New("invalid dump file")
+
+func IsDumpName(name string) bool {
+	return isDumpName(filepath.Base(name))
+}
+
+func isDumpName(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".sql", ".dump", ".backup", ".pgdump":
+		return true
+	default:
+		return false
+	}
+}
+
+// ExistingDumpPath only accepts regular dump files directly in the backups folder.
+func ExistingDumpPath(dir, name string) (string, error) {
+	if name != filepath.Base(name) || strings.ContainsAny(name, `/\`+"\x00") || !isDumpName(name) {
+		return "", ErrInvalidDump
+	}
+	path := filepath.Join(dir, name)
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", ErrInvalidDump
+	}
+	return path, nil
+}
+
+func DeleteDump(dir, name string) error {
+	path, err := ExistingDumpPath(dir, name)
+	if err != nil {
+		return err
+	}
+	return os.Remove(path)
+}
+
+func CopyDump(dir, name, dest string) error {
+	path, err := ExistingDumpPath(dir, name)
+	if err != nil {
+		return err
+	}
+	src, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	srcInfo, err := src.Stat()
+	if err != nil {
+		return err
+	}
+	if destInfo, err := os.Stat(dest); err == nil && os.SameFile(srcInfo, destInfo) {
+		return nil
+	}
+	file, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(file, src)
+	closeErr := file.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	return closeErr
 }
 
 func SafeFileName(name string) (string, error) {
@@ -101,12 +170,11 @@ func ListDumps(dir string) ([]engine.DumpFile, error) {
 			continue
 		}
 		name := entry.Name()
-		ext := strings.ToLower(filepath.Ext(name))
-		if ext != ".sql" && ext != ".dump" && ext != ".backup" && ext != ".pgdump" {
+		if !isDumpName(name) {
 			continue
 		}
 		info, err := entry.Info()
-		if err != nil {
+		if err != nil || !info.Mode().IsRegular() {
 			continue
 		}
 		out = append(out, engine.DumpFile{

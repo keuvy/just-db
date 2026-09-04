@@ -32,7 +32,7 @@ var (
 	ErrInvalidName = errors.New("invalid profile name")
 	ErrDecrypt     = errors.New("cannot decrypt profile")
 
-	namePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+	namePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._ -]{0,63}$`)
 )
 
 // Record is a named engine + connection. Get returns the password.
@@ -137,6 +137,7 @@ func (s *Store) Get(name string) (Record, error) {
 }
 
 func (s *Store) Put(rec Record) error {
+	rec.Name = strings.TrimSpace(rec.Name)
 	if err := ValidateName(rec.Name); err != nil {
 		return err
 	}
@@ -174,7 +175,7 @@ func (s *Store) path(name string) string {
 
 func ValidateName(name string) error {
 	if !namePattern.MatchString(name) || name == keyFileName {
-		return fmt.Errorf("%w: %q (use letters, digits, dot, underscore, hyphen; 1-64 chars)", ErrInvalidName, name)
+		return fmt.Errorf("%w: %q (use letters, digits, space, dot, underscore, hyphen; 1-64 chars)", ErrInvalidName, name)
 	}
 	return nil
 }

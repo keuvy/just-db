@@ -89,6 +89,8 @@ type WailsApp = {
     srcPath: string,
   ) => Promise<void>;
   ListDumps: (dir: string) => Promise<DumpFile[]>;
+  DeleteDump: (name: string) => Promise<void>;
+  SaveDump: (name: string) => Promise<string>;
   PickSavePath: (defaultName: string) => Promise<string>;
   PickOpenPath: () => Promise<string>;
   DefaultDumpName: (name: string, database: string, format: string) => Promise<string>;
@@ -97,6 +99,7 @@ type WailsApp = {
   GetProfile: (name: string) => Promise<Profile>;
   PutProfile: (name: string, engineName: string, cfg: Connection) => Promise<void>;
   DeleteProfile: (name: string) => Promise<void>;
+  ListDatabases: (name: string, cfg: Connection) => Promise<string[]>;
 };
 
 function wailsApp(): WailsApp | undefined {
@@ -171,19 +174,7 @@ export async function exportDump(
 ): Promise<ExportResult> {
   const app = wailsApp();
   if (app?.Export) {
-    let dest = fileName;
-    if (app.PickSavePath) {
-      let suggested = fileName;
-      if (!suggested && app.DefaultDumpName) {
-        suggested = await app.DefaultDumpName(engine, connection.database, format);
-      }
-      const picked = await app.PickSavePath(suggested);
-      if (!picked) {
-        throw new Error("save cancelled");
-      }
-      dest = picked;
-    }
-    return app.Export(engine, connection, { format }, dest);
+    return app.Export(engine, connection, { format }, fileName);
   }
   const response = await fetch("/api/export", {
     method: "POST",
@@ -200,12 +191,12 @@ export async function importDump(
   engine: string,
   connection: Connection,
   format: string,
-  fileName: string,
+  source: string | File,
   dropExisting: boolean,
 ): Promise<void> {
   const app = wailsApp();
   if (app?.ImportDump) {
-    let src = fileName;
+    let src = typeof source === "string" ? source : "";
     if (!src && app.PickOpenPath) {
       src = await app.PickOpenPath();
     }
@@ -215,6 +206,20 @@ export async function importDump(
     await app.ImportDump(engine, connection, { format, dropExisting, confirm: true }, src);
     return;
   }
+  if (source instanceof File) {
+    const form = new FormData();
+    form.append("engine", engine);
+    form.append("connection", JSON.stringify(connection));
+    form.append("format", format);
+    form.append("dropExisting", dropExisting ? "true" : "false");
+    form.append("confirm", "true");
+    form.append("file", source, source.name);
+    const response = await fetch("/api/import", { method: "POST", body: form });
+    if (!response.ok) {
+      throw new Error(await readError(response));
+    }
+    return;
+  }
   const response = await fetch("/api/import", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -222,7 +227,7 @@ export async function importDump(
       engine,
       connection,
       format,
-      fileName,
+      fileName: source,
       dropExisting,
       confirm: true,
     }),
@@ -245,6 +250,38 @@ export async function getDefaults(): Promise<Defaults | null> {
 
 export function dumpDownloadURL(name: string): string {
   return `/api/dumps/${encodeURIComponent(name)}`;
+}
+
+export async function downloadDump(name: string): Promise<boolean> {
+  const app = wailsApp();
+  if (app) {
+    return Boolean(await app.SaveDump(name));
+  }
+  const url = dumpDownloadURL(name);
+  const response = await fetch(url, { method: "HEAD" });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  // Let the browser stream the file without buffering a whole database in memory.
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  return true;
+}
+
+export async function deleteDump(name: string): Promise<void> {
+  const app = wailsApp();
+  if (app) {
+    await app.DeleteDump(name);
+    return;
+  }
+  const response = await fetch(dumpDownloadURL(name), { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
 }
 
 export async function pickOpenPath(): Promise<string> {
@@ -327,4 +364,21 @@ export async function deleteProfile(name: string): Promise<void> {
   if (!response.ok) {
     throw new Error(await readError(response));
   }
+}
+
+export async function listDatabases(engine: string, connection: Connection): Promise<string[]> {
+  const app = wailsApp();
+  if (app?.ListDatabases) {
+    return app.ListDatabases(engine, connection);
+  }
+  const response = await fetch("/api/databases", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ engine, connection }),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  const body = (await response.json()) as { databases: string[] };
+  return body.databases ?? [];
 }

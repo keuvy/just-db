@@ -189,6 +189,10 @@ dd {
   gap: 0.75rem 1rem;
 }
 
+.form-grid > * {
+  min-width: 0;
+}
+
 @media (min-width: 720px) {
   .form-grid {
     grid-template-columns: 1fr 1fr;
@@ -199,12 +203,34 @@ dd {
   grid-column: 1 / -1;
 }
 
+.saved-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.saved-head h2 {
+  margin: 0;
+}
+
+.count {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
 .profile-list {
   list-style: none;
   margin: 0.75rem 0 1rem;
   padding: 0;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
+  max-height: 16rem;
+  overflow-y: auto;
 }
 
 .profile-item {
@@ -229,6 +255,7 @@ dd {
 
 .profile-item.selected {
   border-color: var(--accent);
+  background: #15170f;
 }
 
 .profile-item-name {
@@ -299,6 +326,89 @@ select {
   gap: 0.6rem;
 }
 
+.workbench-actions {
+  margin-top: 1rem;
+}
+
+.dump-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0;
+}
+
+.dump-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem 1.25rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.dump-item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.dump-detail {
+  display: flex;
+  flex: 1 1 20rem;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.35rem;
+  overflow-wrap: anywhere;
+}
+
+.dump-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.import-dialog {
+  color: var(--text);
+  width: min(34rem, calc(100% - 2rem));
+}
+
+.import-dialog::backdrop {
+  background: #0009;
+}
+
+.file-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.field-caption {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.file-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.file-name {
+  color: var(--muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 button {
   background: var(--accent);
   color: #101114;
@@ -325,9 +435,18 @@ button.ghost:hover {
   color: var(--accent);
 }
 
+button.ghost.danger {
+  color: var(--bad);
+}
+
+button.ghost.danger:hover {
+  border-color: var(--bad);
+}
+
 .status {
   margin: 1rem 0 0;
   min-height: 1.4em;
+  overflow-wrap: anywhere;
 }
 
 .status.ok {

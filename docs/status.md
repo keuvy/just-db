@@ -96,11 +96,12 @@ Listen default in the image: `0.0.0.0:8080`. Dumps live under `{dataDir}/backups
 | GET | `/health`, `/api/health` | public even when basic auth is on |
 | GET | `/api/engines`, `/api/defaults`, `/api/dumps` | protected if auth is set |
 | GET | `/api/dumps/{name}` | download |
+| DELETE | `/api/dumps/{name}` | delete a saved dump |
 | GET | `/api/profiles` | list (no passwords) |
 | GET | `/api/profiles/{name}` | full record, including password |
 | PUT | `/api/profiles/{name}` | create or replace |
 | DELETE | `/api/profiles/{name}` | |
-| POST | `/api/test-connection`, `/api/export`, `/api/import` | import needs `confirm: true` |
+| POST | `/api/test-connection`, `/api/export`, `/api/import` | import needs `confirm: true`. JSON `fileName` is a file in `backups/`. Multipart field `file` uploads any local `.sql`/`.dump` |
 
 Basic auth: `JUSTDB_AUTH_USER` / `JUSTDB_AUTH_PASSWORD`.
 
@@ -114,8 +115,8 @@ Same UI as the web app. Detects Wails (`window.go.main.App`) vs HTTP.
 
 - Data dir: `$XDG_DATA_HOME/just-db` or `~/.local/share/just-db` (Linux); `~/Library/Application Support/just-db` (macOS)
 - Profiles: `{dataDir}/profiles/*.jdb` (encrypted). CLI `-data` defaults to `./data`, so desktop and CLI do not share profiles unless you point them at the same directory.
-- Export: native save dialog, default filename like `postgres-app-20260901-201500.dump`
-- Import: dump list from the backups folder, or a file picker
+- Export: creates a backup, then opens a native save dialog for a copy
+- Import: file picker. Web uploads the file; desktop opens a native open dialog.
 - Window title **just-db**; process / `.desktop` / package name **just-db-desktop**
 - Linux: `desktop/packaging/just-db-desktop.desktop`, SVG icon, nfpm `.deb`/`.rpm` with client tools as Recommends
 
@@ -123,7 +124,7 @@ Same UI as the web app. Detects Wails (`window.go.main.App`) vs HTTP.
 
 ## Frontend
 
-Vanilla TypeScript: engine switch, connection form, saved profiles, test / export / import, dump list. Web can download dumps. Desktop uses native dialogs and can open the backups folder.
+Vanilla TypeScript: engine switch, connection form, saved profiles, test / export / import. Export creates and downloads a dump. The Dumps tab lists saved files with Download and Delete actions. Import asks for a local file. Desktop uses native save dialogs for downloads and can open the backups folder.
 
 ## Tests
 

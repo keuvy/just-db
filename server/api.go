@@ -3,6 +3,9 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -62,6 +65,25 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (s *Server) handleListDatabases(w http.ResponseWriter, r *http.Request) {
+	var req testRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	eng, err := s.reg.Get(req.Engine)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	names, err := eng.ListDatabases(r.Context(), req.Connection.toEngine())
+	if err != nil {
+		writeError(w, statusFor(err), err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"databases": names})
+}
+
 func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	var req exportRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -95,6 +117,11 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
+	media, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if media == "multipart/form-data" {
+		s.handleImportUpload(w, r)
+		return
+	}
 	var req importRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -121,18 +148,89 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-func (s *Server) handleDumpDownload(w http.ResponseWriter, r *http.Request) {
-	path, err := s.dumpPath(r.PathValue("name"))
+func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
+	}
+	var conn apiConnection
+	if raw := r.FormValue("connection"); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &conn); err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("connection: %w", err))
+			return
+		}
+	}
+	eng, err := s.reg.Get(engine.Name(r.FormValue("engine")))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if _, err := os.Stat(path); err != nil {
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("file is required"))
+		return
+	}
+	defer file.Close()
+	name := filepath.Base(header.Filename)
+	if !job.IsDumpName(name) {
+		writeError(w, http.StatusBadRequest, job.ErrInvalidDump)
+		return
+	}
+	tmp, err := os.CreateTemp("", "justdb-import-*"+strings.ToLower(filepath.Ext(name)))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := io.Copy(tmp, file); err != nil {
+		_ = tmp.Close()
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if err := job.ImportFromFile(r.Context(), eng, conn.toEngine(), engine.ImportOptions{
+		Format:       r.FormValue("format"),
+		DropExisting: formTrue(r.FormValue("dropExisting")),
+		Confirm:      formTrue(r.FormValue("confirm")),
+	}, tmpName); err != nil {
 		writeError(w, statusFor(err), err)
 		return
 	}
-	w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(path)+`"`)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func formTrue(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Server) handleDumpDownload(w http.ResponseWriter, r *http.Request) {
+	path, err := job.ExistingDumpPath(job.BackupsDir(s.opts.DataDir), r.PathValue("name"))
+	if err != nil {
+		writeError(w, statusFor(err), err)
+		return
+	}
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(path)}))
 	http.ServeFile(w, r, path)
+}
+
+func (s *Server) handleDumpDelete(w http.ResponseWriter, r *http.Request) {
+	if err := job.DeleteDump(job.BackupsDir(s.opts.DataDir), r.PathValue("name")); err != nil {
+		writeError(w, statusFor(err), err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (s *Server) handleDumps(w http.ResponseWriter, r *http.Request) {
@@ -252,6 +350,7 @@ func statusFor(err error) int {
 		errors.Is(err, profile.ErrNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, engine.ErrInvalidConnection),
+		errors.Is(err, job.ErrInvalidDump),
 		errors.Is(err, engine.ErrUnsupportedFormat),
 		errors.Is(err, engine.ErrImportNotConfirmed),
 		errors.Is(err, profile.ErrInvalidName):

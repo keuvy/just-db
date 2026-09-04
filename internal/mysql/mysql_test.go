@@ -41,6 +41,15 @@ func TestMariaSSLArgs(t *testing.T) {
 	}
 }
 
+func TestClientArgsOmitsEmptyDatabase(t *testing.T) {
+	cfg := engine.Connection{Host: "127.0.0.1", Port: 3306, User: "root"}.Normalized(3306)
+	tool := engine.Tool{Name: "mysql", Path: "/usr/bin/mysql"}
+	joined := strings.Join(clientArgs("/tmp/justdb-my.cnf", cfg, tool), " ")
+	if strings.Contains(joined, "--database=") {
+		t.Fatalf("did not expect database arg: %q", joined)
+	}
+}
+
 func TestMysqlFormatCoercesCustom(t *testing.T) {
 	got, err := mysqlFormat(engine.FormatCustom)
 	if err != nil || got != engine.FormatSQL {

@@ -23,7 +23,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: %s <serve|tools|test|export|import|profile|version>", appmeta.Name)
+		return fmt.Errorf("usage: %s <serve|tools|test|export|import|profile|databases|version>", appmeta.Name)
 	}
 	switch args[0] {
 	case "serve":
@@ -38,6 +38,8 @@ func run(args []string) error {
 		return cmdImport(args[1:])
 	case "profile":
 		return cmdProfile(args[1:])
+	case "databases":
+		return cmdDatabases(args[1:])
 	case "version", "-version", "--version":
 		fmt.Printf("%s %s\n", appmeta.Name, appmeta.Version)
 		return nil
@@ -107,6 +109,32 @@ func cmdTest(args []string) error {
 		return err
 	}
 	fmt.Println("ok")
+	return nil
+}
+
+func cmdDatabases(args []string) error {
+	fs := flag.NewFlagSet("databases", flag.ContinueOnError)
+	data := registerDataFlag(fs)
+	profileName := registerProfileFlag(fs)
+	c := registerConnFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	engName, cfg, err := resolveConn(fs, c, *data, *profileName)
+	if err != nil {
+		return err
+	}
+	eng, err := registry.New().Get(engName)
+	if err != nil {
+		return err
+	}
+	names, err := eng.ListDatabases(context.Background(), cfg)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		fmt.Println(name)
+	}
 	return nil
 }
 

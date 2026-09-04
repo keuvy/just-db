@@ -59,10 +59,25 @@ func (c Connection) Validate() error {
 	if strings.TrimSpace(c.User) == "" {
 		return fmt.Errorf("%w: user is required", ErrInvalidConnection)
 	}
+	return nil
+}
+
+func (c Connection) RequireDatabase() error {
 	if strings.TrimSpace(c.Database) == "" {
-		return fmt.Errorf("%w: database is required", ErrInvalidConnection)
+		return fmt.Errorf("%w: pick a database", ErrInvalidConnection)
 	}
 	return nil
+}
+
+func LineNames(raw string) []string {
+	out := make([]string, 0)
+	for _, line := range strings.Split(raw, "\n") {
+		name := strings.TrimSpace(line)
+		if name != "" {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 type ExportOptions struct {
@@ -153,6 +168,7 @@ type Engine interface {
 	DefaultPort() int
 	DetectTools(ctx context.Context) (Tools, error)
 	TestConnection(ctx context.Context, cfg Connection) error
+	ListDatabases(ctx context.Context, cfg Connection) ([]string, error)
 	Export(ctx context.Context, cfg Connection, opts ExportOptions, out io.Writer) error
 	Import(ctx context.Context, cfg Connection, opts ImportOptions, in io.Reader) error
 }

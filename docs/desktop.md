@@ -42,7 +42,7 @@ Dumps default to a per-user backups folder (created on first launch):
 | Linux | `$XDG_DATA_HOME/just-db/backups` or `~/.local/share/just-db/backups` |
 | macOS | `~/Library/Application Support/just-db/backups` |
 
-Export opens a native save dialog (default name like `postgres-app-20260901-201500.dump`). Import uses the dump list in that folder, or a file picker if nothing is selected.
+Export creates a dump in the backups folder, then opens a native save dialog for a copy. Cancelling the dialog keeps the backup. The Dumps tab lists these files with Download and Delete actions. Import asks for a local file through a native open dialog.
 
 Saved profiles live in `{data dir}/profiles/`, encrypted. The desktop app does not use `./data`; CLI commands do unless you pass `-data` pointing at the same directory.
 

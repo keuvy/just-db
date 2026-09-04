@@ -7,7 +7,7 @@ PostgreSQL or MySQL/MariaDB. A dump from one engine restores only to that same e
 _Avoid_: database type, dialect, backend
 
 **Connection**:
-Host, port, user, password, database name, and SSL mode for one engine.
+Host, port, user, password, and SSL mode for one engine. Database is optional on a saved connection; dump and restore need a database chosen at that moment.
 _Avoid_: DSN, connection string, credentials (as the whole object)
 
 **Profile**:

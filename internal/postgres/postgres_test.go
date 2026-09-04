@@ -48,9 +48,17 @@ func TestRestoreArgsStdinAndClean(t *testing.T) {
 	}
 }
 
+func TestCatalogDB(t *testing.T) {
+	if catalogDB(engine.Connection{}) != "postgres" {
+		t.Fatal("empty connection should use postgres")
+	}
+	if catalogDB(engine.Connection{Database: "shop"}) != "shop" {
+		t.Fatal("explicit database should win")
+	}
+}
+
 func TestValidate(t *testing.T) {
-	err := engine.Connection{User: "u"}.Validate()
-	if err == nil {
-		t.Fatal("expected database required")
+	if err := (engine.Connection{User: "u"}).Validate(); err != nil {
+		t.Fatal(err)
 	}
 }

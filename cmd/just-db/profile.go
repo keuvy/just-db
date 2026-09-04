@@ -48,7 +48,11 @@ func cmdProfileList(args []string) error {
 		return nil
 	}
 	for _, item := range list {
-		fmt.Printf("%s  %s  %s:%d  %s / %s\n", item.Name, item.Engine, item.Host, item.Port, item.User, item.Database)
+		db := item.Database
+		if db == "" {
+			db = "-"
+		}
+		fmt.Printf("%s  %s  %s:%d  %s / %s\n", item.Name, item.Engine, item.Host, item.Port, item.User, db)
 	}
 	return nil
 }

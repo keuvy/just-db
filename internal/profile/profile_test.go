@@ -167,12 +167,32 @@ func TestInvalidName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"", "has space", "../etc", "key", "bad/name", string(make([]byte, 70))} {
+	for _, name := range []string{"", "../etc", "key", "bad/name", string(make([]byte, 70))} {
 		rec := sample("x")
 		rec.Name = name
 		if err := st.Put(rec); !errors.Is(err, ErrInvalidName) {
 			t.Errorf("name %q: %v", name, err)
 		}
+	}
+}
+
+func TestPutWithoutDatabase(t *testing.T) {
+	t.Setenv(envKey, "")
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := sample("plenario digital")
+	rec.Connection.Database = ""
+	if err := st.Put(rec); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.Get("plenario digital")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Connection.Database != "" || got.Connection.User != "app" {
+		t.Fatalf("%+v", got)
 	}
 }
 

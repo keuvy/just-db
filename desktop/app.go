@@ -71,6 +71,14 @@ func (a *App) TestConnection(name string, cfg engine.Connection) error {
 	return eng.TestConnection(a.context(), cfg)
 }
 
+func (a *App) ListDatabases(name string, cfg engine.Connection) ([]string, error) {
+	eng, err := a.reg.Get(engine.Name(name))
+	if err != nil {
+		return nil, err
+	}
+	return eng.ListDatabases(a.context(), cfg)
+}
+
 func (a *App) Export(name string, cfg engine.Connection, opts engine.ExportOptions, destPath string) (engine.ExportResult, error) {
 	eng, err := a.reg.Get(engine.Name(name))
 	if err != nil {
@@ -111,6 +119,32 @@ func (a *App) DefaultDumpName(name, database, format string) string {
 	return job.DefaultFileName(engName, database, engine.CoerceFormat(engName, format))
 }
 
+func (a *App) DeleteDump(name string) error {
+	dir, err := appdir.Backups()
+	if err != nil {
+		return err
+	}
+	return job.DeleteDump(dir, name)
+}
+
+func (a *App) SaveDump(name string) (string, error) {
+	dir, err := appdir.Backups()
+	if err != nil {
+		return "", err
+	}
+	if _, err := job.ExistingDumpPath(dir, name); err != nil {
+		return "", err
+	}
+	dest, err := a.PickSavePath(name)
+	if err != nil || dest == "" {
+		return "", err
+	}
+	if err := job.CopyDump(dir, name, dest); err != nil {
+		return "", err
+	}
+	return dest, nil
+}
+
 func (a *App) PickSavePath(defaultName string) (string, error) {
 	dir, _ := appdir.Backups()
 	return runtime.SaveFileDialog(a.context(), runtime.SaveDialogOptions{
@@ -126,10 +160,10 @@ func (a *App) PickSavePath(defaultName string) (string, error) {
 func (a *App) PickOpenPath() (string, error) {
 	dir, _ := appdir.Backups()
 	return runtime.OpenFileDialog(a.context(), runtime.OpenDialogOptions{
-		Title:            "Open dump",
+		Title:            "Import file",
 		DefaultDirectory: dir,
 		Filters: []runtime.FileFilter{
-			{DisplayName: "Database dump", Pattern: "*.dump;*.sql"},
+			{DisplayName: "SQL or dump", Pattern: "*.dump;*.sql;*.backup;*.pgdump"},
 		},
 	})
 }

@@ -37,6 +37,7 @@ func (e *Engine) TestConnection(ctx context.Context, cfg engine.Connection) erro
 	if !tools.Client.Found {
 		return fmt.Errorf("%w: psql", engine.ErrToolsMissing)
 	}
+	cfg.Database = catalogDB(cfg)
 	var discarded strings.Builder
 	return proc.Run(ctx, proc.RunOptions{
 		Path:   tools.Client.Path,
@@ -46,7 +47,31 @@ func (e *Engine) TestConnection(ctx context.Context, cfg engine.Connection) erro
 	})
 }
 
+func (e *Engine) ListDatabases(ctx context.Context, cfg engine.Connection) ([]string, error) {
+	cfg, detected, err := e.prepare(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if !detected.Client.Found {
+		return nil, fmt.Errorf("%w: psql", engine.ErrToolsMissing)
+	}
+	cfg.Database = catalogDB(cfg)
+	var out strings.Builder
+	if err := proc.Run(ctx, proc.RunOptions{
+		Path:   detected.Client.Path,
+		Args:   append(clientArgs(cfg), "--tuples-only", "--no-align", "--command", "SELECT datname FROM pg_database WHERE datallowconn ORDER BY 1"),
+		Env:    clientEnv(cfg),
+		Stdout: &out,
+	}); err != nil {
+		return nil, err
+	}
+	return engine.LineNames(out.String()), nil
+}
+
 func (e *Engine) Export(ctx context.Context, cfg engine.Connection, opts engine.ExportOptions, out io.Writer) error {
+	if err := cfg.RequireDatabase(); err != nil {
+		return err
+	}
 	cfg, detected, err := e.prepare(ctx, cfg)
 	if err != nil {
 		return err
@@ -73,6 +98,9 @@ func (e *Engine) Export(ctx context.Context, cfg engine.Connection, opts engine.
 func (e *Engine) Import(ctx context.Context, cfg engine.Connection, opts engine.ImportOptions, in io.Reader) error {
 	if !opts.Confirm {
 		return engine.ErrImportNotConfirmed
+	}
+	if err := cfg.RequireDatabase(); err != nil {
+		return err
 	}
 	cfg, detected, err := e.prepare(ctx, cfg)
 	if err != nil {
@@ -144,6 +172,13 @@ func (e *Engine) resetPublicSchema(ctx context.Context, cfg engine.Connection, p
 		Args: append(clientArgs(cfg), "--set", "ON_ERROR_STOP=1", "--command", sql),
 		Env:  clientEnv(cfg),
 	})
+}
+
+func catalogDB(cfg engine.Connection) string {
+	if db := strings.TrimSpace(cfg.Database); db != "" {
+		return db
+	}
+	return "postgres"
 }
 
 func clientArgs(cfg engine.Connection) []string {

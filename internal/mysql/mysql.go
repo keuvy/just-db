@@ -46,7 +46,31 @@ func (e *Engine) TestConnection(ctx context.Context, cfg engine.Connection) erro
 	})
 }
 
+func (e *Engine) ListDatabases(ctx context.Context, cfg engine.Connection) ([]string, error) {
+	cfg, detected, defaults, cleanup, err := e.prepare(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	if !detected.Client.Found {
+		return nil, fmt.Errorf("%w: mysql/mariadb", engine.ErrToolsMissing)
+	}
+	cfg.Database = ""
+	var out strings.Builder
+	if err := proc.Run(ctx, proc.RunOptions{
+		Path:   detected.Client.Path,
+		Args:   append(clientArgs(defaults, cfg, detected.Client), "--batch", "--skip-column-names", "--execute", "SHOW DATABASES"),
+		Stdout: &out,
+	}); err != nil {
+		return nil, err
+	}
+	return engine.LineNames(out.String()), nil
+}
+
 func (e *Engine) Export(ctx context.Context, cfg engine.Connection, opts engine.ExportOptions, out io.Writer) error {
+	if err := cfg.RequireDatabase(); err != nil {
+		return err
+	}
 	cfg, detected, defaults, cleanup, err := e.prepare(ctx, cfg)
 	if err != nil {
 		return err
@@ -68,6 +92,9 @@ func (e *Engine) Export(ctx context.Context, cfg engine.Connection, opts engine.
 func (e *Engine) Import(ctx context.Context, cfg engine.Connection, opts engine.ImportOptions, in io.Reader) error {
 	if !opts.Confirm {
 		return engine.ErrImportNotConfirmed
+	}
+	if err := cfg.RequireDatabase(); err != nil {
+		return err
 	}
 	cfg, detected, defaults, cleanup, err := e.prepare(ctx, cfg)
 	if err != nil {

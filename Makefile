@@ -1,4 +1,4 @@
-.PHONY: serve tools test frontend desktop desktop-dev package-linux docker
+.PHONY: serve tools test frontend desktop desktop-dev package-linux rpm docker
 
 export PATH := $(HOME)/.local/go/bin:$(HOME)/go/bin:$(PATH)
 GO ?= go
@@ -39,6 +39,10 @@ desktop-dev: desktop/build/appicon.png
 package-linux: desktop
 	mkdir -p dist
 	$(NFPM) pkg --packager deb --config desktop/packaging/nfpm.yaml --target dist/
+	$(NFPM) pkg --packager rpm --config desktop/packaging/nfpm.yaml --target dist/
+
+rpm: desktop
+	mkdir -p dist
 	$(NFPM) pkg --packager rpm --config desktop/packaging/nfpm.yaml --target dist/
 
 docker: frontend

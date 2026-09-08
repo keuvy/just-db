@@ -14,9 +14,11 @@ COPY . .
 COPY --from=ui /src/dist ./frontend/dist
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/just-db ./cmd/just-db
 
-FROM debian:bookworm-slim
+# Match the production PostgreSQL major version for dump/restore compatibility.
+# The entrypoint below runs just-db, not the PostgreSQL server.
+FROM postgres:17-bookworm
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl postgresql-client mariadb-client \
+    && apt-get install -y --no-install-recommends ca-certificates curl mariadb-client \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/just-db /usr/local/bin/just-db
 COPY --from=ui /src/dist /usr/share/just-db/ui

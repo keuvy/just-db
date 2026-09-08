@@ -41,12 +41,10 @@ package-linux: desktop
 	$(NFPM) pkg --packager deb --config desktop/packaging/nfpm.yaml --target dist/
 	$(NFPM) pkg --packager rpm --config desktop/packaging/nfpm.yaml --target dist/
 
-rpm: desktop
-	mkdir -p dist
-	$(NFPM) pkg --packager rpm --config desktop/packaging/nfpm.yaml --target dist/
-
-docker: frontend
-	docker build -t just-db:dev .
+docker:
+	@set -a; if [ -f .env ]; then . ./.env; fi; set +a; \
+		docker build --tag "$${DOCKER_REGISTRY:?Set DOCKER_REGISTRY in .env}/just-db:latest" . && \
+		docker push "$${DOCKER_REGISTRY}/just-db:latest"
 
 version:
 	$(GO) run ./cmd/just-db version

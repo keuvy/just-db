@@ -54,6 +54,19 @@ The GUI binary is **`just-db-desktop`** so it does not clash with the CLI. Detai
 
 ## EasyPanel
 
+To build and push an image to your registry, copy `.env.example` to `.env` and
+set `DOCKER_REGISTRY` (for example, `registry.example.com/team`, without a
+URL scheme or trailing slash). From the repository root, run:
+
+```bash
+make docker
+```
+
+The Makefile loads `.env` as shell-compatible assignments. This builds
+`DOCKER_REGISTRY/just-db:latest` and pushes it after a successful build.
+Docker builds both the frontend and Go binary inside the image. Log in with
+`docker login <registry-host>` first if your registry requires authentication.
+
 Step-by-step: [docs/easypanel.md](docs/easypanel.md).
 
 Same project as the database, domain to port **8080**, volume `/data`. Optional basic auth: `JUSTDB_AUTH_USER` / `JUSTDB_AUTH_PASSWORD`. Prefill the UI with `JUSTDB_ENGINE`, `JUSTDB_HOST`, `JUSTDB_USER`, `JUSTDB_PASSWORD`, `JUSTDB_DATABASE`. Optional profile key: `JUSTDB_PROFILES_KEY` (keeps the encryption key off the volume).

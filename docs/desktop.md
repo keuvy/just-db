@@ -87,8 +87,14 @@ Arch: build the binary with `make desktop` and install `desktop/build/bin/just-d
 
 ## macOS
 
+From the repository root, build a universal app for Intel and Apple Silicon and create a compressed DMG:
+
 ```bash
-cd desktop && wails build
+make dmg
 ```
 
-The `.app` is under `desktop/build/bin/`. Client tools from Homebrew are discovered on common `libpq` / `mysql-client` prefixes.
+The DMG is written to `dist/just-db-<version>.dmg`, using `info.productVersion` from `desktop/wails.json`. For version `0.1.0`, the output is `dist/just-db-0.1.0.dmg`. Rebuilding replaces the DMG for that version.
+
+The app is at `desktop/build/bin/just-db.app`. To build only the app for the current machine's architecture, run `make desktop`. For only a universal app, run `make desktop WAILS_PLATFORM=darwin/universal`.
+
+Client tools from Homebrew are discovered on common `libpq` / `mysql-client` prefixes.

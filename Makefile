@@ -1,11 +1,12 @@
-.PHONY: serve tools test frontend desktop desktop-dev package-linux docker
+.PHONY: serve tools test frontend desktop desktop-dev dmg package-linux docker
 
 export PATH := $(HOME)/.local/go/bin:$(HOME)/go/bin:$(PATH)
 GO ?= go
 LISTEN ?= 127.0.0.1:8080
 WAILS ?= wails
+WAILS_PLATFORM ?=
 NFPM ?= nfpm
-VERSION ?= 0.1.0
+VERSION ?= $(shell node -p "require('./desktop/wails.json').info.productVersion")
 
 # Fedora 40+ / Debian with WebKitGTK 4.1 need this Wails build tag.
 # Skip the probe when pkg-config is missing so `make serve` stays quiet on macOS.
@@ -31,10 +32,15 @@ desktop/build/appicon.png: desktop/packaging/appicon.png
 	cp -f desktop/packaging/appicon.png desktop/build/appicon.png
 
 desktop: frontend desktop/build/appicon.png
-	cd desktop && $(WAILS) build $(if $(WAILS_TAGS),-tags $(WAILS_TAGS),)
+	cd desktop && $(WAILS) build $(if $(WAILS_PLATFORM),-platform $(WAILS_PLATFORM),) $(if $(WAILS_TAGS),-tags $(WAILS_TAGS),)
 
 desktop-dev: desktop/build/appicon.png
 	cd desktop && $(WAILS) dev $(if $(WAILS_TAGS),-tags $(WAILS_TAGS),)
+
+dmg: WAILS_PLATFORM = darwin/universal
+dmg: desktop
+	mkdir -p dist
+	hdiutil create -volname "just-db" -srcfolder desktop/build/bin -format UDZO -ov "dist/just-db-$(VERSION).dmg"
 
 package-linux: desktop
 	mkdir -p dist

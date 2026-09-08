@@ -60,13 +60,15 @@ func cmdServe(args []string) error {
 	}
 	engineName, conn := server.DefaultsFromEnv()
 	return server.New(server.Options{
-		Listen:        *listen,
-		DataDir:       *data,
-		UIDir:         *ui,
-		AuthUser:      *authUser,
-		AuthPassword:  *authPassword,
-		DefaultEngine: engineName,
-		DefaultConn:   conn,
+		Listen:         *listen,
+		DataDir:        *data,
+		UIDir:          *ui,
+		AuthUser:       *authUser,
+		AuthPassword:   *authPassword,
+		AllowedIPs:     os.Getenv("JUSTDB_ALLOWED_IPS"),
+		TrustedProxies: os.Getenv("JUSTDB_TRUSTED_PROXIES"),
+		DefaultEngine:  engineName,
+		DefaultConn:    conn,
 	}).ListenAndServe()
 }
 

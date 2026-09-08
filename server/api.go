@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"just-db/internal/engine"
 	"just-db/internal/job"
@@ -85,14 +87,30 @@ func (s *Server) handleListDatabases(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	id := started.UnixNano()
+	log.Printf("export started id=%d", id)
 	var req exportRequest
+	fail := func(status int, err error) {
+		if errors.Is(err, engine.ErrUnknownEngine) {
+			status = http.StatusNotFound
+		}
+		message := err.Error()
+		for _, secret := range []string{req.Connection.Password, os.Getenv("PGPASSWORD"), os.Getenv("JUSTDB_PASSWORD")} {
+			if secret != "" {
+				message = strings.ReplaceAll(message, secret, "[REDACTED]")
+			}
+		}
+		log.Printf("export failed id=%d status=%d duration=%s error=%q", id, status, time.Since(started), message)
+		writeError(w, status, err)
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		fail(http.StatusBadRequest, err)
 		return
 	}
 	eng, err := s.reg.Get(req.Engine)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		fail(http.StatusBadRequest, err)
 		return
 	}
 	format := engine.CoerceFormat(eng.Name(), engine.InferFormat(req.FileName, req.Format))
@@ -102,7 +120,7 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	}
 	path, err := s.dumpPath(name)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		fail(http.StatusBadRequest, err)
 		return
 	}
 	result, err := job.ExportToFile(r.Context(), eng, req.Connection.toEngine(), engine.ExportOptions{
@@ -110,9 +128,10 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		Tables: req.Tables,
 	}, path)
 	if err != nil {
-		writeError(w, statusFor(err), err)
+		fail(statusFor(err), err)
 		return
 	}
+	log.Printf("export completed id=%d duration=%s bytes=%d", id, time.Since(started), result.Bytes)
 	writeJSON(w, http.StatusOK, result)
 }
 

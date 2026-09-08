@@ -34,6 +34,26 @@ Host names are the EasyPanel **service names**, often `{project}_{service}` (for
 
 On the internal network, TLS to Postgres/MySQL is usually off: set `JUSTDB_SSLMODE=disable`.
 
+### Restrict web access by IP
+
+Set `JUSTDB_ALLOWED_IPS` in the app service environment to your public client IP
+or a comma-separated list of IPs/CIDRs, for example `203.0.113.10`.
+An empty value disables the restriction. IPv4 and IPv6 are supported.
+Other clients receive HTTP 403; basic auth still applies to allowed clients.
+Only `/health` bypasses the IP restriction for container health checks.
+
+Behind EasyPanel, also set `JUSTDB_TRUSTED_PROXIES` to the actual proxy peer
+IP or its narrowly scoped network CIDR. The app accepts `X-Forwarded-For` only
+from those peers and checks the chain from right to left. Do not use
+`0.0.0.0/0` or `::/0`; trust only proxies that correctly append or overwrite
+the forwarded header. Without a trusted proxy, the socket peer IP is used.
+Denied requests log `client_ip` in the container logs.
+
+Invalid entries prevent server startup. Restart/redeploy after changing these
+variables. With Docker Compose, put them in `.env`; Compose forwards them to
+the container. Restricting inbound web access does not restrict outbound
+database connections.
+
 ## 3. Volume layout
 
 Dumps are written under the volume:
@@ -49,7 +69,12 @@ The UI lists those files, can restore them, and can download them. Saved profile
 
 ## 4. Client tools
 
-The image includes `postgresql-client` and `mariadb-client`. Client major version should match the server (`pg_dump` 16 against PostgreSQL 16). If restore fails with unknown `SET` options, the dump was made with a newer client than the target server.
+The image includes PostgreSQL 17 client tools and `mariadb-client`. The runtime
+uses `postgres:17-bookworm`, with its entrypoint replaced by just-db; it does not
+start a PostgreSQL server. Client major version should match the server. For a
+different PostgreSQL major version, change the runtime image tag and rebuild.
+If restore fails with unknown `SET` options, the dump was made with a newer
+client than the target server.
 
 ## 5. Same engine only
 

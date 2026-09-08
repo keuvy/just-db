@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -17,13 +18,15 @@ import (
 )
 
 type Options struct {
-	Listen        string
-	DataDir       string
-	UIDir         string
-	AuthUser      string
-	AuthPassword  string
-	DefaultEngine engine.Name
-	DefaultConn   engine.Connection
+	Listen         string
+	DataDir        string
+	UIDir          string
+	AuthUser       string
+	AuthPassword   string
+	AllowedIPs     string
+	TrustedProxies string
+	DefaultEngine  engine.Name
+	DefaultConn    engine.Connection
 }
 
 type Server struct {
@@ -74,9 +77,15 @@ func (s *Server) routes() {
 	s.mux.Handle("/", s.uiHandler())
 }
 
-func (s *Server) Handler() http.Handler { return s.withAuth(s.mux) }
+func (s *Server) Handler() http.Handler { return s.withIPAllowlist(s.withAuth(s.mux)) }
 
 func (s *Server) ListenAndServe() error {
+	if _, err := parseIPRanges(s.opts.AllowedIPs); err != nil {
+		return fmt.Errorf("JUSTDB_ALLOWED_IPS: %w", err)
+	}
+	if _, err := parseIPRanges(s.opts.TrustedProxies); err != nil {
+		return fmt.Errorf("JUSTDB_TRUSTED_PROXIES: %w", err)
+	}
 	if err := os.MkdirAll(job.BackupsDir(s.opts.DataDir), 0o755); err != nil {
 		return err
 	}

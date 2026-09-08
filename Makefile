@@ -1,4 +1,4 @@
-.PHONY: serve tools test frontend desktop desktop-dev package-linux docker
+.PHONY: serve tools test frontend desktop desktop-dev package-linux rpm docker
 
 export PATH := $(HOME)/.local/go/bin:$(HOME)/go/bin:$(PATH)
 GO ?= go

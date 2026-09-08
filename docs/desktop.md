@@ -61,6 +61,15 @@ just-db shells out to `pg_dump` / `pg_restore` / `psql` and `mysqldump` / `mysql
 
 ## Linux packages
 
+Build the desktop app and package only an RPM (requires the build dependencies
+above and `nfpm`):
+
+```bash
+make rpm
+```
+
+The RPM is written to `dist/`. The current packaging configuration targets amd64.
+
 After `make desktop`, if [nfpm](https://nfpm.goreleaser.com/) is installed:
 
 ```bash

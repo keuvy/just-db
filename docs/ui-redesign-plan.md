@@ -1,6 +1,6 @@
-# just-db UI redesign plan
+# UI redesign plan: historical record
 
-Design record, 2026-09-04. The shared web and Wails interface has been implemented from this plan. See [UI guide and verification](ui.md) for the delivered behavior, screenshots, and remaining runtime checks. The audit below describes the interface before the redesign.
+Archived design record, 2026-09-04. It is not the current implementation specification or a list of remaining tasks. The shared web and Wails interface has been implemented from this plan. See [UI guide and verification](ui.md) for the delivered behavior, screenshots, and remaining runtime checks. The audit below describes the interface before the redesign. For 0.2.0 capabilities and current limitations, use [Project status](status.md); for build/test commands, use the [documentation index](README.md).
 
 Rebuild just-db around a persistent profile sidebar and a focused database workspace. Give profile management, export, restore, dumps, and tool diagnostics their own clear places. Use the window efficiently and keep the selected target visible whenever an operation can affect it.
 

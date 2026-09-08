@@ -6,6 +6,7 @@ LISTEN ?= 127.0.0.1:8080
 WAILS ?= wails
 WAILS_PLATFORM ?=
 NFPM ?= nfpm
+CREATE_DMG ?= create-dmg
 VERSION ?= $(shell node -p "require('./desktop/wails.json').info.productVersion")
 
 # Fedora 40+ / Debian with WebKitGTK 4.1 need this Wails build tag.
@@ -38,9 +39,10 @@ desktop-dev: desktop/build/appicon.png
 	cd desktop && $(WAILS) dev $(if $(WAILS_TAGS),-tags $(WAILS_TAGS),)
 
 dmg: WAILS_PLATFORM = darwin/universal
-dmg: desktop
-	mkdir -p dist
-	hdiutil create -volname "just-db" -srcfolder desktop/build/bin -format UDZO -ov "dist/just-db-$(VERSION).dmg"
+dmg:
+	@CREATE_DMG="$(CREATE_DMG)" bash desktop/packaging/macos/create-dmg.sh --check
+	$(MAKE) desktop WAILS_PLATFORM="$(WAILS_PLATFORM)"
+	CREATE_DMG="$(CREATE_DMG)" bash desktop/packaging/macos/create-dmg.sh "$(VERSION)"
 
 package-linux: desktop
 	mkdir -p dist

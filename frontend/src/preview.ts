@@ -21,7 +21,7 @@ export function createPreviewClient(options: { empty?: boolean; many?: boolean; 
   });
   return {
     runtimeMode: () => options.desktop ? "desktop" : "web",
-    getHealth: async () => ({ status: "ok", name: "just-db", version: "0.1.0", mode: options.desktop ? "desktop" : "web", dataDir: "/data", backupsDir: "/data/backups" }),
+    getHealth: async () => ({ status: "ok", name: "just-db", version: "0.2.0", mode: options.desktop ? "desktop" : "web", dataDir: "/data", backupsDir: "/data/backups" }),
     getDefaults: async () => null,
     getEngines: async () => { await wait(); return structuredClone(engines); },
     listProfiles: async () => { await wait(); return profiles.map(profile => ({ name: profile.name, engine: profile.engine, host: profile.connection.host, port: profile.connection.port, user: profile.connection.user, database: profile.connection.database, sslMode: profile.connection.sslMode })); },

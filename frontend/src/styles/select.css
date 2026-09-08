@@ -1,0 +1,36 @@
+.custom-select { display: block; min-width: 0; width: 100%; }
+.select-field { position: relative; }
+.select-control { width: 100%; min-width: 0; min-height: 40px; padding: 9px 11px; background: var(--input); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font-size: 13px; font-weight: 400; text-align: left; justify-content: space-between; gap: 12px; transition: border-color 120ms, box-shadow 120ms; }
+.select-control:hover:not(:disabled) { background: var(--input); border-color: var(--line-strong); }
+.select-control:focus-visible, .select-open .select-control { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); }
+.select-control:disabled { opacity: .5; cursor: not-allowed; }
+.select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.select-placeholder { color: var(--muted); }
+.select-chevron { width: 14px; height: 14px; color: var(--muted); transform: rotate(90deg); transition: transform 120ms; }
+.select-open .select-chevron { transform: rotate(-90deg); color: var(--accent); }
+.select-leading-icon { position: absolute; z-index: 1; left: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--muted); pointer-events: none; }
+.select-with-icon .select-control { padding-left: 38px; }
+.select-editable .select-control { padding-right: 40px; font: 12px/1.5 var(--mono); }
+.select-toggle { position: absolute; right: 4px; top: 4px; bottom: 4px; width: 30px; min-height: 0; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--muted); }
+.select-toggle:hover:not(:disabled) { background: var(--surface-hover); }
+.select-popup { position: fixed; inset: auto; z-index: 100; display: flex; flex-direction: column; margin: 0; padding: 5px; min-width: 0; max-width: calc(100vw - 16px); overflow: hidden; background: var(--surface); color: var(--text); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: 0 4px 8px #0000000d, var(--shadow); font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.select-options { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; scroll-padding: 4px; }
+.select-options::-webkit-scrollbar { width: 6px; }
+.select-options::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 6px; }
+.select-option { display: flex; align-items: center; gap: 12px; min-height: 37px; padding: 8px 10px; border: 1px solid transparent; border-radius: 6px; cursor: pointer; user-select: none; }
+.select-option + .select-option { margin-top: 2px; }
+.select-option[aria-selected="true"] { background: var(--selected); }
+.select-option.is-active { background: var(--surface-hover); border-color: var(--line-strong); }
+.select-option[aria-selected="true"].is-active { background: var(--selected); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.select-option[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.select-option-copy { flex: 1; min-width: 0; }
+.select-option-label { display: block; overflow-wrap: anywhere; }
+.select-option-description { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.select-check { width: 15px; height: 15px; color: var(--accent); visibility: hidden; }
+.select-option[aria-selected="true"] .select-check { visibility: visible; }
+.select-editable .select-option-label { font: 12px/1.5 var(--mono); }
+.select-empty { padding: 14px 10px; color: var(--muted); font-size: 12px; }
+.select-hint { flex-shrink: 0; padding: 9px 10px 4px; margin-top: 5px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+@media (max-width: 639px) {
+  .select-control, .select-option { min-height: 42px; }
+}

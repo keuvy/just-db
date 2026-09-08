@@ -1,137 +1,116 @@
-# What is already built
+# Project status and interfaces
 
-Version **0.1.0**. Same-engine only: a PostgreSQL dump restores to PostgreSQL, a MySQL dump restores to MySQL. SQLite is not in this version.
+Version **0.2.0**. Source review: **2026-09-08**. This page describes implemented behavior, not a claim that every platform and database version has been tested. Start with the [documentation index](README.md) for operational guides.
 
-Two binaries share one Go engine (`internal/`):
+## Implemented behavior
 
-| Binary | Role |
-|---|---|
-| `just-db` | CLI plus `just-db serve` (HTTP UI for EasyPanel / Docker) |
-| `just-db-desktop` | Wails v2 native window (Debian, Fedora, Arch, macOS) |
+Two entry points share the Go engines in `internal/`:
 
-Passwords never go on `pg_dump` / `mysqldump` argv. Postgres uses `PGPASSWORD`. MySQL/MariaDB uses a mode-0600 `--defaults-file` (must be the first argument).
+| Entry point | Role |
+| --- | --- |
+| `just-db` | CLI operations and the `serve` HTTP application |
+| `just-db-desktop` | Wails v2 native app with the same frontend and engine operations |
 
-How to run and deploy: [README](../README.md), [EasyPanel](easypanel.md), [desktop](desktop.md).
+The application saves encrypted connection profiles, lists databases, exports dumps, restores local or stored dumps, and lists/downloads/deletes files in the dump library. The UI has a profile sidebar, an Export/Restore workspace, session activity, Tools & settings, responsive navigation, and light/dark/system appearance.
 
-## Phases
+macOS packaging supports a universal Intel/Apple Silicon app in a versioned DMG with an Applications shortcut. The web server supports optional basic authentication and an IP allowlist with explicit trusted-proxy handling.
 
-| Phase | What shipped |
-|---|---|
-| 0 Skeleton | Go module, CLI stubs, engine interface, Vite UI, Dockerfile, Makefile |
-| 1 PostgreSQL | `pg_dump` / `pg_restore` / `psql`, custom + SQL formats, roundtrip tests |
-| 2 MySQL / MariaDB | `mysqldump` / `mysql` (MariaDB names too), SQL only, roundtrip tests |
-| 3 EasyPanel | HTTP API, basic auth, `/data` volume, env prefill, docs |
-| 4 Native desktop | Wails app, XDG/mac data dir, native dialogs, `.desktop` + nfpm packaging |
-| 5 Connection profiles | Named engine+connection, AES-GCM at rest, CLI / HTTP / desktop / UI |
+SQLite, cross-engine conversion, scheduled backups, persistent background jobs, progress percentages, cancellation, automatic PostgreSQL client-version selection, and a client-version selector per profile are not implemented. The UI permits one export or restore at a time in that UI session; it is not a server-wide job queue.
 
-Not built (later): scheduled backups, SQLite.
+## Source layout
 
-## Layout
+| Path | Responsibility |
+| --- | --- |
+| [`cmd/just-db/`](../cmd/just-db/) | CLI commands and profile/connection flag resolution |
+| [`internal/engine/`](../internal/engine/) | Engine interface, connection fields, formats, and import/export options |
+| [`internal/postgres/`](../internal/postgres/), [`internal/mysql/`](../internal/mysql/) | Database client commands and engine-specific behavior |
+| [`internal/tools/`](../internal/tools/) | Executable discovery and client version display |
+| [`internal/proc/`](../internal/proc/) | Subprocess execution, environment, and error output |
+| [`internal/job/`](../internal/job/) | Dump filenames, file operations, export/import orchestration |
+| [`internal/profile/`](../internal/profile/) | Named encrypted profiles |
+| [`internal/appdir/`](../internal/appdir/), [`internal/appmeta/`](../internal/appmeta/) | Desktop storage locations and app identity/version |
+| [`server/`](../server/) | HTTP routes, authentication, IP access, environment defaults, export logs |
+| [`desktop/`](../desktop/) | Wails bindings, native dialogs, window setup, and packaging |
+| [`frontend/src/`](../frontend/src/) | Shared TypeScript interface and HTTP/Wails adapter |
+| [`Dockerfile`](../Dockerfile) | Node 24 frontend build, Go 1.27 server build, PostgreSQL 17 runtime tools |
+| [`docker-compose.yml`](../docker-compose.yml) | Web app plus optional PostgreSQL 18/MySQL 8.4 test services |
 
-```
-cmd/just-db/           CLI: serve, tools, test, export, import, version
-internal/
-  engine/              Engine interface, Connection, formats, CoerceFormat
-  postgres/            pg_dump, pg_restore, psql
-  mysql/               mysqldump / mysql via --defaults-file
-  job/                 ExportToFile, ImportFromFile, ListDumps, SafeFileName
-  proc/                subprocess runner
-  tools/               LookPath (including Homebrew / pgsql dirs)
-  registry/            postgres + mysql
-  profile/             encrypted named connections
-  appdir/              desktop data dir + backups/
-  appmeta/             name + version
-server/                HTTP API + basic auth + env defaults
-desktop/               Wails v2 (outputfilename just-db-desktop)
-  packaging/           icon, .desktop, nfpm.yaml
-frontend/              Vite + vanilla TypeScript (HTTP or Wails)
-Dockerfile             CGO_ENABLED=0 server + postgresql-client + mariadb-client
-docker-compose.yml     app + optional postgres:18 / mysql:8.4 test profiles
-```
+## Engines and client selection
 
-## Engines
+| Engine | Export formats | Restore executable |
+| --- | --- | --- |
+| PostgreSQL | Custom `.dump` by default, or plain `.sql` | `pg_restore` for custom archives; `psql` for SQL |
+| MySQL / MariaDB | SQL only; custom requests are coerced to SQL | `mysql` or `mariadb` |
 
-**PostgreSQL** (default port 5432)
+The app searches `PATH` first, then a fixed list of common directories. Each PostgreSQL executable is resolved independently. It displays the detected version but does not compare it with the server version. Tool presence and a successful connection test do not prove that export or restore will work. See [tool discovery and compatibility](troubleshooting.md).
 
-- Formats: `custom` (`.dump`, default) and `sql` (`.sql`)
-- Restore of custom format uses a seekable file (`pg_restore` cannot take stdin)
-- Import requires `confirm`
-- Drop-existing drops objects via restore flags; it does not `DROP DATABASE`
-- Client major version must match the server (`pg_dump` 18 into PG 16 fails on options such as `SET transaction_timeout`)
+For backups intended to return to the same PostgreSQL major version, use that major's client tools. Newer `pg_dump` can read supported older servers; older `pg_dump` refuses newer-major servers. Loading a dump into an older major version is not guaranteed, even if the source server was that older version. See the [PostgreSQL compatibility notes](https://www.postgresql.org/docs/18/app-pgdump.html#APP-PGDUMP-NOTES).
 
-**MySQL / MariaDB** (default port 3306)
+PostgreSQL custom restore uses a seekable file. The Go import contract requires `Confirm`; the UI adds a review step, SQL engine acknowledgment, and typed database-name confirmation when drop-existing is enabled.
 
-- Format: SQL only (`custom` is coerced to `sql`)
-- `--get-server-public-key` for MySQL 8 `caching_sha2_password` without TLS
-- `--ssl-mode=DISABLED` vs MariaDB `--skip-ssl`
-- Drop-existing drops **tables**, not the database
-- `mysqldump` is not passed `--connect-timeout` (unknown variable)
+| Drop-existing mode | Behavior |
+| --- | --- |
+| PostgreSQL custom archive | `pg_restore --clean --if-exists` drops the objects being restored |
+| PostgreSQL SQL | Drops `public` with `CASCADE`, recreates it, and reapplies grants before running the SQL |
+| MySQL / MariaDB SQL | Drops base tables in the selected database before running the SQL |
 
-`just-db tools` and the UI engine cards report whether dump/restore/client binaries are on `PATH`.
+These operations do not issue `DROP DATABASE`. SQL files can contain destructive statements independently of the drop-existing option; PostgreSQL SQL exports currently include `--clean --if-exists`. A failed restore can leave partial changes.
 
-## CLI (`just-db`)
+PostgreSQL passwords are passed through `PGPASSWORD`. MySQL uses a temporary mode-0600 defaults file with `--defaults-file` first in the command arguments. MySQL/MariaDB-specific SSL and public-key flags are selected in the engine. See the [engine source](../internal/mysql/mysql.go).
 
-```
-just-db version
-just-db tools
-just-db serve [-listen] [-data] [-ui] [-auth-user] [-auth-password]
-just-db profile list|save|show|delete [-data]
-just-db test  -engine postgres|mysql …   or  -profile NAME
-just-db export -engine … -out <path> [-format sql|custom]   or  -profile NAME
-just-db import -engine … -in <path> -confirm [-drop] [-format]   or  -profile NAME
-```
+## CLI
 
-Password: `-password`, `JUSTDB_PASSWORD`, `PGPASSWORD`, or `MYSQL_PWD`.
+Run from the repository with `go run ./cmd/just-db <command>`, or use a built `just-db` binary.
 
-Profiles live under `{dataDir}/profiles/`. Name is the identity (`prod`, `shop-mysql`). `just-db profile show` hides the password unless `-include-password`. `test` / `export` / `import` take `-profile`; any connection flag you also pass overrides the stored field.
+| Command | Purpose and main flags |
+| --- | --- |
+| `version` | Print the runtime version |
+| `tools` | Report executable paths, versions, and missing tools |
+| `serve` | HTTP app; `-listen`, `-data`, `-ui`, `-auth-user`, `-auth-password` |
+| `test` | Test a connection; connection flags or `-profile NAME` |
+| `databases` | List databases; connection flags or `-profile NAME` |
+| `export` | Export with required `-out`; optional `-format sql` or `-format custom` |
+| `import` | Restore with required `-in` and `-confirm`; optional `-drop` and `-format` |
+| `profile list` | List summaries; optional `-data` |
+| `profile save` | Create or overwrite `-name NAME` using connection flags |
+| `profile show` | Read `-name NAME`; password hidden unless `-include-password` |
+| `profile delete` | Delete `-name NAME` |
 
-Encryption key: `JUSTDB_PROFILES_KEY` (64 hex chars, or any passphrase hashed with SHA-256). If unset, just-db writes a 32-byte key file at `{dataDir}/profiles/key` (mode 0600). Set the env var on EasyPanel so the volume holds ciphertext only.
+Connection flags are `-engine`, `-host`, `-port`, `-user`, `-password`, `-database`, and `-sslmode`. With `-profile`, explicitly supplied flags override stored fields. Password fallback is `JUSTDB_PASSWORD`, then `PGPASSWORD`, then `MYSQL_PWD`. Prefer the environment to putting secrets in shell command history.
 
-## HTTP (`just-db serve`)
+CLI storage defaults to `JUSTDB_DATA` or `./data`. `make serve` explicitly uses `./data`, `frontend/dist`, and `LISTEN`, whose default is `127.0.0.1:8080`. Direct `serve` defaults to `0.0.0.0:8080` and honors the corresponding `JUSTDB_*` settings. See [the CLI source](../cmd/just-db/main.go).
 
-Listen default in the image: `0.0.0.0:8080`. Dumps live under `{dataDir}/backups/`.
+## HTTP
 
-| Method | Path | Auth |
-|---|---|---|
-| GET | `/health`, `/api/health` | public even when basic auth is on |
-| GET | `/api/engines`, `/api/defaults`, `/api/dumps` | protected if auth is set |
-| GET | `/api/dumps/{name}` | download |
-| DELETE | `/api/dumps/{name}` | delete a saved dump |
-| GET | `/api/profiles` | list (no passwords) |
-| GET | `/api/profiles/{name}` | full record, including password |
-| PUT | `/api/profiles/{name}` | create or replace |
-| DELETE | `/api/profiles/{name}` | |
-| POST | `/api/test-connection`, `/api/export`, `/api/import` | import needs `confirm: true`. JSON `fileName` is a file in `backups/`. Multipart field `file` uploads any local `.sql`/`.dump` |
+Routes are defined in [`server/server.go`](../server/server.go); payloads and file handling are in [`server/api.go`](../server/api.go).
 
-Basic auth: `JUSTDB_AUTH_USER` / `JUSTDB_AUTH_PASSWORD`.
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/health`, `/api/health` | Runtime version, mode, and storage paths |
+| GET | `/api/engines`, `/api/tools` | Engine descriptions and detected client tools |
+| GET | `/api/defaults` | Web connection defaults, storage paths, and auth status |
+| GET | `/api/dumps` | Stored dump files |
+| GET | `/api/dumps/{name}` | Download a stored dump; HEAD is also supported |
+| DELETE | `/api/dumps/{name}` | Delete a stored dump |
+| GET | `/api/profiles` | Profile summaries without passwords |
+| GET | `/api/profiles/{name}` | Full profile including its password |
+| PUT | `/api/profiles/{name}` | Create or replace the named profile |
+| DELETE | `/api/profiles/{name}` | Delete the named profile |
+| POST | `/api/test-connection` | Test `{engine, connection}` |
+| POST | `/api/databases` | List databases for `{engine, connection}` |
+| POST | `/api/export` | Export `{engine, connection, format, fileName, tables}` and return path/size/format |
+| POST | `/api/import` | Restore a stored dump via JSON or a browser upload via multipart |
 
-UI prefill: `JUSTDB_ENGINE`, `JUSTDB_HOST`, `JUSTDB_PORT`, `JUSTDB_USER`, `JUSTDB_PASSWORD`, `JUSTDB_DATABASE`, `JUSTDB_SSLMODE`.
+Import JSON uses `engine`, `connection`, `format`, `fileName`, `dropExisting`, and `confirm`. Multipart uses the same connection/options fields plus `file`; `connection` is JSON text. Uploads accept `.sql`, `.dump`, `.backup`, and `.pgdump`, are copied to temporary storage, and are removed after the request. The 32 MiB multipart setting is a memory threshold, not a maximum upload size.
 
-Docker volume: `/data`. Health check: `GET /health`.
+Setting `JUSTDB_AUTH_USER` enables basic authentication. Both health paths bypass basic auth, but only `/health` bypasses the IP allowlist. `/api/health` remains subject to `JUSTDB_ALLOWED_IPS`. The UI, downloads, defaults, and profiles use the same access controls. Full profiles and web defaults can contain database passwords.
 
-## Desktop (`just-db-desktop`)
+Exports log `export started`, `export completed`, or `export failed` with a request ID and timing; success includes bytes. The export failure log redacts the supplied password and configured PostgreSQL password values. This is request logging, not persistent job history. See [deployment and access configuration](easypanel.md).
 
-Same UI as the web app. Detects Wails (`window.go.main.App`) vs HTTP.
+## Storage and profiles
 
-- Data dir: `$XDG_DATA_HOME/just-db` or `~/.local/share/just-db` (Linux); `~/Library/Application Support/just-db` (macOS)
-- Profiles: `{dataDir}/profiles/*.jdb` (encrypted). CLI `-data` defaults to `./data`, so desktop and CLI do not share profiles unless you point them at the same directory.
-- Export: creates a backup, then opens a native save dialog for a copy
-- Import: file picker. Web uploads the file; desktop opens a native open dialog.
-- Window title **just-db**; process / `.desktop` / package name **just-db-desktop**
-- Linux: `desktop/packaging/just-db-desktop.desktop`, SVG icon, nfpm `.deb`/`.rpm` with client tools as Recommends
+Profiles are `{dataDir}/profiles/<name>.jdb`. The name is the identity; saving the same name overwrites it. The store uses AES-256-GCM with an environment-supplied key or a generated key file. See the [encryption decision](adr/0001-encrypted-profiles.md) and [recovery guidance](troubleshooting.md#profiles-missing-or-cannot-decrypt-profile).
 
-`make desktop` needs GTK 3 + WebKitGTK **headers** (see [desktop.md](desktop.md)). On Fedora 40+ that is `gtk3-devel` and `webkit2gtk4.1-devel`, plus `-tags webkit2_41`.
+Dumps are `{dataDir}/backups/`. The library accepts regular `.sql`, `.dump`, `.backup`, and `.pgdump` files and does not record server version, source engine, or profile provenance. Export creates a library file before the UI offers a download or native save-copy dialog. Cancelling that dialog keeps the original. Failed exports remove the output file.
 
-## Frontend
-
-The shared vanilla TypeScript interface uses a persistent profile sidebar, a database workspace with Export and Restore modes, a searchable dump library, and Tools & settings. New/Edit profile opens a side sheet. A profile's optional default database stays separate from the database selected for an operation.
-
-Restore accepts a local file or a stored dump and requires source, target, and final review. SQL files require an engine acknowledgment; drop-existing also requires typing the target database name. Export creates a dump before attempting the browser download or native save dialog. Session activity preserves the captured target and separates dump creation from saving a copy.
-
-The UI includes light, dark, and system appearance, responsive navigation, manual database entry when discovery fails, and contextual tool diagnostics. See [UI guide and screenshots](ui.md).
-
-## Tests
-
-`make test` (`go test ./...`). Postgres roundtrip uses `postgres:18-alpine` (Podman/Docker). MySQL roundtrip uses `mysql:8.4`.
-
-In `frontend/`, `npm test` runs the focused state, operation, interaction, and HTTP-payload tests; `npm run build` checks TypeScript and builds the production assets. The sample preview is available only through the Vite development server with `?preview`.
+Desktop storage is `~/Library/Application Support/just-db` on macOS, and `$XDG_DATA_HOME/just-db` or `~/.local/share/just-db` on Linux. Desktop and CLI profiles are separate unless the CLI is pointed at the desktop data directory. See [desktop setup](desktop.md) and [testing](testing.md).

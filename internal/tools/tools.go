@@ -17,6 +17,7 @@ func extraDirs() []string {
 	dirs := []string{
 		"/opt/homebrew/bin",
 		"/usr/local/bin",
+		"/usr/local/mysql/bin",
 		"/opt/homebrew/opt/libpq/bin",
 		"/opt/homebrew/opt/mysql-client/bin",
 		"/opt/homebrew/opt/mariadb/bin",
@@ -32,7 +33,7 @@ func extraDirs() []string {
 	return dirs
 }
 
-// LookPath finds an executable on PATH, then in common Homebrew and Postgres dirs.
+// LookPath finds an executable on PATH, then in common database client directories.
 func LookPath(name string) (string, error) {
 	if path, err := exec.LookPath(name); err == nil {
 		return path, nil

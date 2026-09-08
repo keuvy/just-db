@@ -1,100 +1,133 @@
-# Desktop app
+# Desktop builds and packaging
 
-The native app is **`just-db-desktop`**. It wraps the same Go engines as `just-db serve`. Do not name the GUI binary `just-db` — that name is the CLI.
+The native app uses the same engines and frontend as the web app. Its window and macOS bundle are named `just-db`; the executable and Linux package are named `just-db-desktop`.
 
-Window title stays **just-db**. Process / package name is **just-db-desktop** (`StartupWMClass=just-db-desktop`).
+Source: [Makefile](../Makefile), [Wails configuration](../desktop/wails.json), [desktop bindings](../desktop/app.go). Source review: 2026-09-08, version 0.2.0.
 
-## Build
+## Build prerequisites
 
-Needs Go 1.25+, Node.js 22+, and [Wails v2](https://wails.io/).
-
-Linux also needs GTK 3 and WebKitGTK **headers** (runtime packages are not enough):
-
-| Distro | Build packages |
-|---|---|
-| Debian / Ubuntu | `libgtk-3-dev` and `libwebkit2gtk-4.1-dev` (or `libwebkit2gtk-4.0-dev` on older releases) |
-| Fedora 40+ | `gtk3-devel webkit2gtk4.1-devel gcc` |
-| Arch | `gtk3 webkit2gtk-4.1 base-devel` |
-
-Fedora 40+ and current Debian/Ubuntu ship WebKitGTK **4.1**. `make desktop` passes `-tags webkit2_41` when `pkg-config webkit2gtk-4.1` is present. On older 4.0-only hosts, leave the tag off.
+Use Go 1.27 and Node.js 24 to match the current Docker build toolchains. The Go module declares `go 1.25.0`; the frontend also depends on the engine requirements of the locked Vite/Vitest versions. Install the Wails CLI version used by the module:
 
 ```bash
 export PATH="$HOME/.local/go/bin:$HOME/go/bin:$PATH"
 go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
 wails doctor
+```
+
+On macOS, Xcode or its command-line developer tools provide the native compiler and SDK. `wails doctor` checks the Wails build environment. Database client availability is checked separately by `make tools` or Tools & settings in the app.
+
+Linux builds require GTK 3 and WebKitGTK development headers. Typical packages are:
+
+| Distro | Build packages |
+| --- | --- |
+| Debian / Ubuntu | `libgtk-3-dev` and `libwebkit2gtk-4.1-dev`, or `libwebkit2gtk-4.0-dev` on older systems |
+| Fedora | `gtk3-devel`, `webkit2gtk4.1-devel`, `gcc` |
+| Arch | `gtk3`, `webkit2gtk`, `base-devel` |
+
+The Makefile detects `webkit2gtk-4.1` through `pkg-config` and supplies `-tags webkit2_41`. `WAILS_TAGS` can override the detected value. See [Wails installation](https://wails.io/docs/gettingstarted/installation/) for platform prerequisites.
+
+## Build or develop
+
+Run from the repository root:
+
+```bash
 make desktop
 ```
 
-Dev loop (Vite + live reload):
+This installs/builds the frontend, copies the app icon when needed, and runs Wails. The default is the host architecture. Outputs are:
+
+| Platform | Output |
+| --- | --- |
+| macOS | `desktop/build/bin/just-db.app` |
+| macOS executable inside the bundle | `desktop/build/bin/just-db.app/Contents/MacOS/just-db-desktop` |
+| Linux | `desktop/build/bin/just-db-desktop` |
+
+Launch the macOS build with:
+
+```bash
+open desktop/build/bin/just-db.app
+```
+
+For Vite and Wails live reload:
 
 ```bash
 make desktop-dev
 ```
 
-The binary lands at `desktop/build/bin/just-db-desktop`.
+## Universal macOS app and DMG
 
-## Data directory
+A universal app contains both Intel `amd64` and Apple Silicon `arm64` code. To build only that app:
 
-Dumps default to a per-user backups folder (created on first launch):
+```bash
+make desktop WAILS_PLATFORM=darwin/universal
+```
 
-| OS | Path |
-|---|---|
-| Linux | `$XDG_DATA_HOME/just-db/backups` or `~/.local/share/just-db/backups` |
-| macOS | `~/Library/Application Support/just-db/backups` |
+For the branded installer, install [create-dmg](https://github.com/create-dmg/create-dmg), then run:
 
-Export creates a dump in the backups folder, then opens a native save dialog for a copy. Cancelling the dialog keeps the backup. The Dumps tab lists these files with Download and Delete actions. Import asks for a local file through a native open dialog.
+```bash
+brew install create-dmg
+make dmg
+```
 
-Saved profiles live in `{data dir}/profiles/`, encrypted. The desktop app does not use `./data`; CLI commands do unless you pass `-data` pointing at the same directory.
+`make dmg` checks macOS and packager availability before compiling. It then requests `darwin/universal` and stages only `just-db.app`, excluding unrelated build outputs. The DMG contains an Applications shortcut, a background, and drag-to-install instructions. Packaging uses Finder to arrange the window and needs a logged-in macOS desktop session; approve the terminal's Finder automation request if prompted by macOS.
 
-## Client tools
+Version 0.2.0 produces `dist/just-db-0.2.0.dmg`. The default version is read from `info.productVersion` in `desktop/wails.json`. The packager replaces an existing file for that version only after the new image succeeds; a failed packaging run retains the previous DMG.
 
-just-db shells out to `pg_dump` / `pg_restore` / `psql` and `mysqldump` / `mysql` (MariaDB names work too). Install the clients that match the **server major version**. Packages are **Recommends**, not Depends — you can install only Postgres tools, only MySQL tools, or both.
+Useful variations:
 
-| Distro | PostgreSQL | MySQL / MariaDB |
-|---|---|---|
-| Debian / Ubuntu | `postgresql-client` (or `postgresql-client-16`, …) | `mariadb-client` or `default-mysql-client` |
-| Fedora | `postgresql` | `mariadb` or `community-mysql` |
-| Arch | `postgresql` | `mariadb` |
-| macOS (Homebrew) | `brew install libpq` (then `brew link --force libpq` if needed) | `brew install mysql-client` or `mariadb` |
+```bash
+# Use a packager outside PATH.
+make dmg CREATE_DMG=/path/to/create-dmg
 
-`wails doctor` / the in-app engine cards show whether each binary is on `PATH`.
+# Repackage an existing app without compiling it.
+bash desktop/packaging/macos/create-dmg.sh 0.2.0
+
+# Inspect the architectures actually present in the built app.
+lipo -archs desktop/build/bin/just-db.app/Contents/MacOS/just-db-desktop
+```
+
+Repackaging does not change an app's architecture or embedded version. A `VERSION` override changes the output filename only. See [release metadata](README.md#release-metadata) for the files to update together.
+
+The layout and artwork are in [`desktop/packaging/macos/`](../desktop/packaging/macos/). Regenerate the background after editing its Swift source with:
+
+```bash
+swift desktop/packaging/macos/background.swift desktop/packaging/macos/background.png
+```
+
+To install an updated app, quit the running copy, open the DMG, and drag `just-db.app` into Applications, replacing the old bundle. Profiles and dumps live separately in the data directory. Check the runtime version in Tools & settings after reopening.
+
+The repository does not configure Developer ID signing or Apple notarization. Earlier local Wails builds were ad-hoc signed. Building a universal binary alone does not establish compatibility with every macOS release; the earlier build record and its deployment-target warning are documented in the [UI verification notes](ui.md#verification-recorded-on-2026-09-04).
 
 ## Linux packages
 
-Build the desktop app and package only an RPM (requires the build dependencies
-above and `nfpm`):
-
-```bash
-make rpm
-```
-
-The RPM is written to `dist/`. The current packaging configuration targets amd64.
-
-After `make desktop`, if [nfpm](https://nfpm.goreleaser.com/) is installed:
+Install [nfpm](https://nfpm.goreleaser.com/), then run from the repository root:
 
 ```bash
 make package-linux
 ```
 
-That writes `.deb` and `.rpm` into `dist/`. Install examples:
+This builds the desktop app and creates both `.deb` and `.rpm` files in `dist/`. There is no `make rpm` target. The current [`nfpm.yaml`](../desktop/packaging/nfpm.yaml) declares version 0.2.0 and `amd64`; changing the Wails target alone does not update that package metadata.
 
 ```bash
 sudo apt install ./dist/just-db-desktop_*.deb
 sudo dnf install ./dist/just-db-desktop-*.rpm
 ```
 
-Arch: build the binary with `make desktop` and install `desktop/build/bin/just-db-desktop` plus `desktop/packaging/just-db-desktop.desktop` yourself (or wrap it in a PKGBUILD). The `.desktop` file execs `just-db-desktop`.
+On Arch, install the built binary, [`just-db-desktop.desktop`](../desktop/packaging/just-db-desktop.desktop), and [SVG icon](../desktop/packaging/just-db.svg), or package them in a PKGBUILD. Database clients are recommendations in the Debian/RPM configuration; install the clients for the engines you use.
 
-## macOS
+## Data and client tools
 
-From the repository root, build a universal app for Intel and Apple Silicon and create a compressed DMG:
+| OS | Data directory |
+| --- | --- |
+| macOS | `~/Library/Application Support/just-db` |
+| Linux | `$XDG_DATA_HOME/just-db`, or `~/.local/share/just-db` |
+
+Dumps are in `backups/`; encrypted profiles are in `profiles/`. The CLI defaults to `./data` or `JUSTDB_DATA`. To inspect the desktop profiles from the CLI on macOS:
 
 ```bash
-make dmg
+go run ./cmd/just-db profile list -data "$HOME/Library/Application Support/just-db"
 ```
 
-The DMG is written to `dist/just-db-<version>.dmg`, using `info.productVersion` from `desktop/wails.json`. For version `0.1.0`, the output is `dist/just-db-0.1.0.dmg`. Rebuilding replaces the DMG for that version.
+The app bundle and DMG do not include PostgreSQL or MySQL client executables. Install them on every computer that runs the desktop app. Typical macOS packages are `libpq`, `mysql-client`, or `mariadb`; choose versioned PostgreSQL clients when needed for a particular server.
 
-The app is at `desktop/build/bin/just-db.app`. To build only the app for the current machine's architecture, run `make desktop`. For only a universal app, run `make desktop WAILS_PLATFORM=darwin/universal`.
-
-Client tools from Homebrew are discovered on common `libpq` / `mysql-client` prefixes.
+The app searches `PATH`, then common directories including Homebrew `libpq`/`mysql-client` prefixes and `/usr/local/mysql/bin` for the MySQL macOS installer. It does not automatically select a PostgreSQL version per connection. See [troubleshooting](troubleshooting.md) for exact discovery behavior, Finder launch differences, and version mismatch examples.

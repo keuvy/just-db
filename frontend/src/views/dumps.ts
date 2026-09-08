@@ -1,6 +1,7 @@
 import type { Workspace } from "../app/state";
 import type { Operations } from "../app/operations";
 import { bytes, emptyState, escape, icon, notice } from "../components/html";
+import { customSelect } from "../components/select";
 
 export type DumpSort = "newest" | "oldest" | "name" | "size";
 
@@ -16,5 +17,5 @@ export function dumpRows(state: Workspace, operations: Operations, search: strin
 }
 
 export function dumpsView(state: Workspace, operations: Operations, search: string, sort: DumpSort, busy: Set<string>): string {
-  return `<div class="library-page"><div class="page-intro"><span class="eyebrow">Dump library</span><h2>Ready for the next restore.</h2><p>${state.api.runtimeMode() === "desktop" ? "Dumps stored by this desktop app." : "Dumps stored on this server. Download a copy to keep it on your computer."}</p></div><div class="library-toolbar"><div class="search-field">${icon("search")}<label class="sr-only" for="dump-search">Search dumps</label><input type="search" id="dump-search" placeholder="Search by filename" value="${escape(search)}"/></div><label class="sort-field" for="dump-sort"><span>Sort</span><select id="dump-sort"><option value="newest" ${sort === "newest" ? "selected" : ""}>Newest modified</option><option value="oldest" ${sort === "oldest" ? "selected" : ""}>Oldest modified</option><option value="name" ${sort === "name" ? "selected" : ""}>Filename</option><option value="size" ${sort === "size" ? "selected" : ""}>Largest first</option></select></label></div>${state.dumps.error ? notice({ kind: "error", text: state.dumps.error }) : ""}<div id="dump-rows">${dumpRows(state, operations, search, sort, busy)}</div></div>`;
+  return `<div class="library-page"><div class="page-intro"><span class="eyebrow">Dump library</span><h2>Ready for the next restore.</h2><p>${state.api.runtimeMode() === "desktop" ? "Dumps stored by this desktop app." : "Dumps stored on this server. Download a copy to keep it on your computer."}</p></div><div class="library-toolbar"><div class="search-field">${icon("search")}<label class="sr-only" for="dump-search">Search dumps</label><input type="search" id="dump-search" placeholder="Search by filename" value="${escape(search)}"/></div><div class="sort-field"><label for="dump-sort">Sort</label>${customSelect({ id: "dump-sort", label: "Sort dumps", value: sort, options: [{ value: "newest", label: "Newest modified" }, { value: "oldest", label: "Oldest modified" }, { value: "name", label: "Filename" }, { value: "size", label: "Largest first" }] })}</div></div>${state.dumps.error ? notice({ kind: "error", text: state.dumps.error }) : ""}<div id="dump-rows">${dumpRows(state, operations, search, sort, busy)}</div></div>`;
 }

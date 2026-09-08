@@ -3,6 +3,7 @@ import type { Client } from "../app/client";
 import { message } from "../app/state";
 import { confirmDialog } from "./feedback";
 import { escape, icon, notice } from "./html";
+import { customSelect, type CustomSelect } from "./select";
 
 export class ProfileEditor {
   private dialog: HTMLDialogElement | null = null;
@@ -39,12 +40,12 @@ export class ProfileEditor {
       <header class="dialog-header"><div><span class="eyebrow">Profiles</span><h2 id="editor-title">${profile ? "Edit profile" : "New profile"}</h2></div><button type="button" class="icon-button" data-editor="close" aria-label="Close profile editor">${icon("close")}</button></header>
       <div class="editor-content"><p class="muted">A named connection you can reuse for exports and restores.</p>
       <div class="field">${field("name", "Profile name", profile?.name || name, "text", `required maxlength="64" pattern="[A-Za-z0-9 ._\\-]+" ${profile ? "readonly" : "autofocus"}`)}<span class="field-help">${profile ? "The name identifies this profile and cannot be changed here." : "Up to 64 letters, numbers, spaces, dots, underscores, or hyphens."}</span></div>
-      <div class="field"><label for="editor-engine">Engine</label><select id="editor-engine" name="engine">${options.map(option => `<option value="${escape(option.name)}" ${engine === option.name ? "selected" : ""}>${escape(option.displayName)}</option>`).join("")}</select></div>
+      <div class="field"><label for="editor-engine">Engine</label>${customSelect({ id: "editor-engine", name: "engine", label: "Engine", value: engine, options: options.map(option => ({ value: option.name, label: option.displayName })) })}</div>
       <div class="section-label">Connection</div><div class="form-grid endpoint-fields"><div class="field">${field("host", "Host", connection.host, "text", 'placeholder="127.0.0.1"')}</div><div class="field">${field("port", "Port", connection.port, "number", 'required min="1" max="65535"')}</div></div>
       <div class="field">${field("user", "User", connection.user, "text", 'required autocomplete="off"')}</div>
       <div class="field"><label for="editor-password">Password</label><div class="password-field"><input id="editor-password" name="password" type="password" value="${escape(connection.password)}" autocomplete="new-password"/><button type="button" data-editor="password" class="icon-button" aria-label="Show password" aria-pressed="false">${icon("eye")}</button></div><span class="field-help">Saved profiles are encrypted. An empty password is allowed.</span></div>
-      <div class="section-label">Options</div><div class="field"><label for="editor-sslMode">SSL mode</label><select id="editor-sslMode" name="sslMode">${["prefer", "require", "disable"].map(value => `<option ${value === (connection.sslMode || "prefer") ? "selected" : ""} value="${value}">${value}</option>`).join("")}</select></div>
-      <div class="field">${field("database", "Default database", connection.database, "text", 'list="editor-databases" placeholder="Optional"')}<datalist id="editor-databases"></datalist><span class="field-help">You can choose a database later in the workspace.</span></div>
+      <div class="section-label">Options</div><div class="field"><label for="editor-sslMode">SSL mode</label>${customSelect({ id: "editor-sslMode", name: "sslMode", label: "SSL mode", value: connection.sslMode || "prefer", options: ["prefer", "require", "disable"].map(value => ({ value, label: value })) })}</div>
+      <div class="field"><label for="editor-database">Default database</label>${customSelect({ id: "editor-database", name: "database", label: "Default database", value: connection.database, editable: true, icon: "database", placeholder: "Optional", describedBy: "editor-database-help", options: [], emptyMessage: "Test the connection to discover databases, or enter a name." })}<span id="editor-database-help" class="field-help">You can choose a database later in the workspace.</span></div>
       <div id="editor-test-status" aria-live="polite"></div><div id="editor-error" aria-live="polite"></div>
       </div><footer class="dialog-footer"><button type="button" data-editor="test">Test connection</button><span class="spacer"></span><button type="button" data-editor="close">Cancel</button><button type="submit" class="primary" id="editor-save">Save profile</button></footer></form>`;
     this.dialog = dialog;
@@ -60,7 +61,7 @@ export class ProfileEditor {
       const value = this.read().engine;
       const port = dialog.querySelector<HTMLInputElement>("#editor-port")!;
       port.value = String(engines.find(item => item.name === value)?.defaultPort || (value === "mysql" ? 3306 : 5432));
-      dialog.querySelector("#editor-databases")!.innerHTML = "";
+      dialog.querySelector("#editor-database")!.closest<CustomSelect>("app-select")!.setOptions([]);
       dialog.querySelector("#editor-test-status")!.innerHTML = "";
     });
     dialog.addEventListener("click", event => {
@@ -82,14 +83,14 @@ export class ProfileEditor {
   }
 
   private read(): Profile {
-    const value = (name: string) => this.dialog?.querySelector<HTMLInputElement | HTMLSelectElement>(`#editor-${name}`)?.value || "";
+    const value = (name: string) => this.dialog?.querySelector<HTMLInputElement | HTMLButtonElement>(`#editor-${name}`)?.value || "";
     return { name: value("name").trim(), engine: value("engine"), connection: { host: value("host").trim(), port: Number(value("port")), user: value("user").trim(), password: value("password"), database: value("database").trim(), sslMode: value("sslMode") } };
   }
 
   private busy(): void {
     if (!this.dialog) return;
     this.dialog.querySelectorAll<HTMLButtonElement>("button").forEach(button => { button.disabled = this.saving || (this.testing && button.dataset.editor === "test"); });
-    this.dialog.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input,select").forEach(input => { input.disabled = this.saving; });
+    this.dialog.querySelectorAll<HTMLInputElement>("input").forEach(input => { input.disabled = this.saving; });
     this.dialog.querySelector("#editor-save")!.textContent = this.saving ? "Saving..." : "Save profile";
     this.dialog.querySelector('[data-editor="test"]')!.textContent = this.testing ? "Testing..." : "Test connection";
   }
@@ -111,7 +112,11 @@ export class ProfileEditor {
       status.innerHTML = notice({ kind: "success", text: "Connection succeeded." });
       try {
         const databases = await this.api.listDatabases(profile.engine, { ...profile.connection, database: "" });
-        if (this.dialog === dialog && version === this.version) dialog.querySelector("#editor-databases")!.innerHTML = databases.map(name => `<option value="${escape(name)}"></option>`).join("");
+        if (this.dialog === dialog && version === this.version) {
+          const picker = dialog.querySelector("#editor-database")!.closest<CustomSelect>("app-select")!;
+          picker.dataset.emptyMessage = "No matching databases. Enter a name to continue.";
+          picker.setOptions(databases.map(name => ({ value: name, label: name })));
+        }
       } catch (error) {
         if (this.dialog === dialog && version === this.version) status.innerHTML += notice({ kind: "warning", text: `Database discovery failed: ${message(error, profile.connection.password)}. You can enter a database manually.` });
       }

@@ -33,6 +33,51 @@ async function start() {
 }
 
 describe("rendered workflows", () => {
+  it("saves engine, SSL mode and discovered database choices through the custom controls", async () => {
+    const { client } = await start();
+    const put = vi.spyOn(client, "putProfile");
+    click("#edit-profile");
+    click("#editor-engine");
+    click('#editor-engine-listbox [data-value="mysql"]');
+    expect(document.querySelector<HTMLInputElement>("#editor-port")?.value).toBe("3306");
+    click("#editor-sslMode");
+    click('#editor-sslMode-listbox [data-value="require"]');
+    click('[data-editor="test"]');
+    await vi.waitFor(() => expect(document.querySelector('#editor-database-listbox [data-value="storefront"]')).not.toBeNull());
+    click("#editor-database");
+    click('#editor-database-listbox [data-value="storefront"]');
+    document.querySelector("#profile-form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(put).toHaveBeenCalledWith("local-postgres", "mysql", expect.objectContaining({ port: 3306, sslMode: "require", database: "storefront" })));
+  });
+
+  it("updates sorting, stored source and restore target from custom option clicks", async () => {
+    const { app } = await start();
+    click("#nav-dumps");
+    await vi.waitFor(() => expect(document.querySelector(".dump-table")).not.toBeNull());
+    click("#dump-sort");
+    click('#dump-sort-listbox [data-value="size"]');
+    expect(document.querySelector(".size-cell")?.textContent).toBe("24.6 MB");
+    click('[data-action="select-profile"][data-name="local-postgres"]');
+    await vi.waitFor(() => expect(document.querySelector("#tab-restore")).not.toBeNull());
+    click("#tab-restore");
+    click("#source-library");
+    await vi.waitFor(() => expect(document.querySelectorAll('#restore-library-listbox [role="option"]').length).toBeGreaterThan(1));
+    const dump = app.state.dumps.data[0];
+    click("#restore-library");
+    click("#restore-library-option-1");
+    expect(app.state.source?.name).toBe(dump.name);
+    click("#restore-next-source");
+    click("#restore-profile");
+    click('#restore-profile-listbox [data-value="reporting"]');
+    await vi.waitFor(() => expect(app.state.profile?.name).toBe("reporting"));
+    await vi.waitFor(() => expect(document.querySelector('#workspace-database-listbox [data-value="app_test"]')).not.toBeNull());
+    click("#workspace-database");
+    click('#workspace-database-listbox [data-value="app_test"]');
+    expect(app.state.session?.database).toBe("app_test");
+    expect(document.querySelector<HTMLInputElement>("#workspace-database")?.value).toBe("app_test");
+    expect(document.querySelector("select,datalist")).toBeNull();
+  });
+
   it("keeps database input and operation results when navigating", async () => {
     const { app, client } = await start();
     type("#workspace-database", "selected_db");

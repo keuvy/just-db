@@ -5,9 +5,8 @@
 .database-picker { margin: 0 0 20px; }
 .database-picker-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; }
 .required-label { font-size: 10px; font-weight: 400; color: var(--muted); margin-left: 7px; }
-.input-with-icon, .search-field { position: relative; }
-.input-with-icon > .icon, .search-field > .icon { position: absolute; left: 12px; top: 11px; color: var(--muted); width: 16px; height: 16px; }
-.input-with-icon input { padding-left: 38px; font-family: var(--mono); font-size: 12px; min-height: 40px; }
+.search-field { position: relative; }
+.search-field > .icon { position: absolute; left: 12px; top: 11px; color: var(--muted); width: 16px; height: 16px; }
 .database-picker .field-help { margin-top: 7px; font-size: 11px; }
 .operation-content { border: 1px solid var(--line); border-radius: 10px; padding: 20px; background: var(--surface); }
 .section-heading { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; }
@@ -103,7 +102,8 @@
 .search-field { flex: 1; max-width: 360px; }
 .search-field input { padding-left: 36px; }
 .sort-field { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; margin-left: auto; }
-.sort-field select { width: 170px; }
+.sort-field .custom-select { width: 180px; }
+.sort-field label { font: inherit; }
 .table-scroll { position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); padding-bottom: 7px; }
 .dump-table { border-collapse: collapse; width: 100%; table-layout: fixed; }
 .dump-table th { font-size: 10px; color: var(--muted); font-weight: 550; text-align: left; background: var(--canvas); padding: 11px 14px; border-bottom: 1px solid var(--line); }
@@ -180,7 +180,7 @@
   .library-toolbar { flex-wrap: wrap; gap: 12px; }
   .search-field { flex-basis: 100%; max-width: none; }
   .sort-field { margin: 0; width: 100%; }
-  .sort-field select { flex: 1; }
+  .sort-field .custom-select { flex: 1; }
   .welcome-capabilities { grid-template-columns: 1fr; gap: 20px; }
   .empty-state { padding: 32px 12px; }
   .empty-state h2 { font-size: 20px; }

@@ -7,7 +7,9 @@ Two binaries share one Go engine:
 - `just-db serve` — web UI for EasyPanel / Docker
 - Wails desktop app — native window on Debian, Fedora, Arch, and macOS
 
-SQLite is intentionally not in v1.
+SQLite is not implemented in version 0.2.0.
+
+Guides and current limitations: [documentation index](docs/README.md).
 
 ## Requirements
 
@@ -32,9 +34,9 @@ go run ./cmd/just-db export -engine mysql -host 127.0.0.1 -port 3306 -user justd
 go run ./cmd/just-db import -engine mysql -host 127.0.0.1 -port 3306 -user justdb -database justdb -in ./data/backups/app.sql -confirm
 ```
 
-Password: `-password`, `JUSTDB_PASSWORD`, or `PGPASSWORD` / a MySQL defaults file. Never on the `pg_dump` / `mysqldump` command line.
+Password: `-password`, or the environment fallbacks `JUSTDB_PASSWORD`, `PGPASSWORD`, and `MYSQL_PWD`. The engines pass PostgreSQL passwords through the child environment and MySQL passwords through a temporary defaults file.
 
-Client tools should match the server major version (`pg_dump` 18 into PostgreSQL 18). A newer dump can fail restore on an older server.
+For PostgreSQL backups intended to restore to the same server major, use matching-major client tools. The app currently selects the first executables found, without automatic version matching. See [tool discovery and version troubleshooting](docs/troubleshooting.md).
 
 ```bash
 make test
@@ -42,7 +44,7 @@ make frontend
 make serve
 ```
 
-Desktop (from `desktop/`):
+Desktop, from the repository root:
 
 ```bash
 go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
@@ -50,7 +52,7 @@ wails doctor
 make desktop
 ```
 
-The GUI binary is **`just-db-desktop`** so it does not clash with the CLI. Details: [docs/desktop.md](docs/desktop.md).
+The GUI executable is **`just-db-desktop`**; the macOS bundle is `desktop/build/bin/just-db.app`. For a universal Intel/Apple Silicon installer, install `create-dmg` and run `make dmg`. Version 0.2.0 produces `dist/just-db-0.2.0.dmg`. Details: [desktop builds and packaging](docs/desktop.md).
 
 ## EasyPanel
 

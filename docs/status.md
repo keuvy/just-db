@@ -70,7 +70,7 @@ Run from the repository with `go run ./cmd/just-db <command>`, or use a built `j
 | `test` | Test a connection; connection flags or `-profile NAME` |
 | `databases` | List databases; connection flags or `-profile NAME` |
 | `export` | Export with required `-out`; optional `-format sql` or `-format custom` |
-| `import` | Restore with required `-in` and `-confirm`; optional `-drop` and `-format` |
+| `import` | Restore with required `-in` and `-confirm`; optional `-drop`, `-no-fk-checks`, and `-format` |
 | `profile list` | List summaries; optional `-data` |
 | `profile save` | Create or overwrite `-name NAME` using connection flags |
 | `profile show` | Read `-name NAME`; password hidden unless `-include-password` |
@@ -101,7 +101,7 @@ Routes are defined in [`server/server.go`](../server/server.go); payloads and fi
 | POST | `/api/export` | Export `{engine, connection, format, fileName, tables}` and return path/size/format |
 | POST | `/api/import` | Restore a stored dump via JSON or a browser upload via multipart |
 
-Import JSON uses `engine`, `connection`, `format`, `fileName`, `dropExisting`, and `confirm`. Multipart uses the same connection/options fields plus `file`; `connection` is JSON text. Uploads accept `.sql`, `.dump`, `.backup`, and `.pgdump`, are copied to temporary storage, and are removed after the request. The 32 MiB multipart setting is a memory threshold, not a maximum upload size.
+Import JSON uses `engine`, `connection`, `format`, `fileName`, `dropExisting`, `disableForeignKeys`, and `confirm`. Multipart uses the same connection/options fields plus `file`; `connection` is JSON text. Uploads accept `.sql`, `.dump`, `.backup`, and `.pgdump`, are copied to temporary storage, and are removed after the request. The 32 MiB multipart setting is a memory threshold, not a maximum upload size.
 
 Setting `JUSTDB_AUTH_USER` enables basic authentication. Both health paths bypass basic auth, but only `/health` bypasses the IP allowlist. `/api/health` remains subject to `JUSTDB_ALLOWED_IPS`. The UI, downloads, defaults, and profiles use the same access controls. Full profiles and web defaults can contain database passwords.
 

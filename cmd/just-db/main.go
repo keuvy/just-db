@@ -177,6 +177,7 @@ func cmdImport(args []string) error {
 	inPath := fs.String("in", "", "dump file")
 	format := fs.String("format", "", "sql or custom (inferred from file if empty)")
 	drop := fs.Bool("drop", false, "drop existing objects before restore")
+	noFK := fs.Bool("no-fk-checks", false, "disable foreign key checks during restore")
 	confirm := fs.Bool("confirm", false, "required to run a restore")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -193,9 +194,10 @@ func cmdImport(args []string) error {
 		return err
 	}
 	if err := job.ImportFromFile(context.Background(), eng, cfg, engine.ImportOptions{
-		Format:       *format,
-		DropExisting: *drop,
-		Confirm:      *confirm,
+		Format:             *format,
+		DropExisting:       *drop,
+		DisableForeignKeys: *noFK,
+		Confirm:            *confirm,
 	}, *inPath); err != nil {
 		return err
 	}

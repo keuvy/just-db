@@ -85,7 +85,7 @@ export class Operations {
     if (typeof review.source.value !== "string") record.text = "Uploading and restoring...";
     this.onChange();
     try {
-      await this.api.importDump(profile.engine, profile.connection, review.format, review.source.value, review.dropExisting);
+      await this.api.importDump(profile.engine, profile.connection, review.format, review.source.value, review.dropExisting, review.disableForeignKeys);
       record.status = "success";
       record.text = "Restore finished.";
     } catch (error) {

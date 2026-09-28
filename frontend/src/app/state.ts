@@ -19,6 +19,7 @@ export type RestoreReview = Readonly<{
   format: string;
   source: Source;
   dropExisting: boolean;
+  disableForeignKeys: boolean;
 }>;
 
 export function message(error: unknown, password = ""): string {
@@ -46,6 +47,11 @@ export function dropExplanation(engine: string, format: string): string {
   return "Drops existing objects restored from this archive using pg_restore --clean --if-exists.";
 }
 
+export function foreignKeyExplanation(engine: string): string {
+  if (engine === "mysql") return "Runs the restore session with FOREIGN_KEY_CHECKS=0, so rows can load in any order or reference missing parents. Existing data is not rechecked afterwards.";
+  return "Runs the restore session with session_replication_role=replica, which skips foreign key and trigger enforcement for loaded rows. Requires a superuser. Constraints created by the dump still validate existing rows.";
+}
+
 export class Workspace {
   onChange: () => void = () => {};
   view: View = "workspace";
@@ -65,6 +71,7 @@ export class Workspace {
   sourceMode: "file" | "library" = "file";
   restoreStep = 1;
   dropExisting = false;
+  disableForeignKeys = false;
   review: RestoreReview | null = null;
   acknowledged = false;
   confirmation = "";
@@ -238,7 +245,7 @@ export class Workspace {
     const toolError = requiredTool(this.engines.data, profile.engine, "restore", format);
     if (toolError) throw new Error(toolError);
     this.restoreNotice = undefined;
-    this.review = Object.freeze({ profileName: profile.name, engine: profile.engine, connection: Object.freeze({ ...profile.connection, database }), format, source: Object.freeze({ ...this.source }), dropExisting: this.dropExisting });
+    this.review = Object.freeze({ profileName: profile.name, engine: profile.engine, connection: Object.freeze({ ...profile.connection, database }), format, source: Object.freeze({ ...this.source }), dropExisting: this.dropExisting, disableForeignKeys: this.disableForeignKeys });
     this.restoreStep = 3;
     this.acknowledged = false;
     this.confirmation = "";

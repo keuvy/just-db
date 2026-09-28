@@ -86,9 +86,10 @@ type ExportOptions struct {
 }
 
 type ImportOptions struct {
-	Format       string `json:"format"`
-	DropExisting bool   `json:"dropExisting"`
-	Confirm      bool   `json:"confirm"`
+	Format             string `json:"format"`
+	DropExisting       bool   `json:"dropExisting"`
+	DisableForeignKeys bool   `json:"disableForeignKeys"`
+	Confirm            bool   `json:"confirm"`
 }
 
 func InferFormat(path, explicit string) string {

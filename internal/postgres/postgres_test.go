@@ -62,3 +62,13 @@ func TestValidate(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestImportEnvDisableForeignKeys(t *testing.T) {
+	cfg := engine.Connection{Host: "127.0.0.1", Port: 5432, User: "u", Database: "d"}.Normalized(5432)
+	if got := importEnv(cfg, false)["PGOPTIONS"]; got != "-c statement_timeout=0" {
+		t.Fatalf("unexpected PGOPTIONS: %q", got)
+	}
+	if got := importEnv(cfg, true)["PGOPTIONS"]; got != "-c statement_timeout=0 -c session_replication_role=replica" {
+		t.Fatalf("unexpected PGOPTIONS: %q", got)
+	}
+}

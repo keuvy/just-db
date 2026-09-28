@@ -114,7 +114,7 @@ func (e *Engine) Import(ctx context.Context, cfg engine.Connection, opts engine.
 	}
 	return proc.Run(ctx, proc.RunOptions{
 		Path:  detected.Client.Path,
-		Args:  clientArgs(defaults, cfg, detected.Client),
+		Args:  importArgs(defaults, cfg, detected.Client, opts.DisableForeignKeys),
 		Stdin: in,
 	})
 }
@@ -203,6 +203,16 @@ func clientArgs(defaults string, cfg engine.Connection, tool engine.Tool) []stri
 	}
 	if cfg.Database != "" {
 		args = append(args, "--database="+cfg.Database)
+	}
+	return args
+}
+
+// importArgs disables foreign key checks for the restore session only; the
+// server-wide setting is untouched. A dump that re-enables checks still wins.
+func importArgs(defaults string, cfg engine.Connection, tool engine.Tool, disableForeignKeys bool) []string {
+	args := clientArgs(defaults, cfg, tool)
+	if disableForeignKeys {
+		args = append(args, "--init-command=SET FOREIGN_KEY_CHECKS=0")
 	}
 	return args
 }

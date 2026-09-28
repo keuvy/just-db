@@ -56,3 +56,15 @@ func TestMysqlFormatCoercesCustom(t *testing.T) {
 		t.Fatalf("got %q %v", got, err)
 	}
 }
+
+func TestImportArgsDisableForeignKeys(t *testing.T) {
+	cfg := engine.Connection{Host: "127.0.0.1", Port: 3306, User: "root", Database: "app"}.Normalized(3306)
+	tool := engine.Tool{Name: "mysql", Path: "/usr/bin/mysql"}
+	if joined := strings.Join(importArgs("/tmp/justdb-my.cnf", cfg, tool, false), " "); strings.Contains(joined, "FOREIGN_KEY_CHECKS") {
+		t.Fatalf("did not expect foreign key override: %q", joined)
+	}
+	args := importArgs("/tmp/justdb-my.cnf", cfg, tool, true)
+	if args[len(args)-1] != "--init-command=SET FOREIGN_KEY_CHECKS=0" {
+		t.Fatalf("expected foreign key override: %q", args)
+	}
+}

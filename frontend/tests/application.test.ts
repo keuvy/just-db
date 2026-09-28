@@ -100,10 +100,12 @@ describe("rendered workflows", () => {
     click("#restore-next-source");
     type("#workspace-database", "target_db");
     change("#drop-existing", true);
+    change("#disable-foreign-keys", true);
     click("#restore-next-target");
     const submit = document.querySelector<HTMLButtonElement>("#restore-submit")!;
     expect(submit.disabled).toBe(true);
     expect(document.querySelector(".review-summary")?.textContent).toContain("localhost:5432");
+    expect(document.querySelector(".review-summary")?.textContent).toContain("Foreign key checksDisabled");
     change("#restore-ack", true);
     expect(submit.disabled).toBe(true);
     type("#restore-confirm-name", "target_db");
@@ -112,7 +114,7 @@ describe("rendered workflows", () => {
     submit.click();
     expect(client.importDump).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(app.operations.active).toBeNull());
-    expect(client.importDump).toHaveBeenCalledWith("postgres", expect.objectContaining({ database: "target_db", host: "localhost" }), "sql", "source.sql", true);
+    expect(client.importDump).toHaveBeenCalledWith("postgres", expect.objectContaining({ database: "target_db", host: "localhost" }), "sql", "source.sql", true, true);
   });
 
   it("does not silently restore after changing the reviewed profile", async () => {
@@ -161,20 +163,21 @@ describe("HTTP import adapter", () => {
   it("preserves the stored-file JSON contract", async () => {
     const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response('{}', { status: 200 }));
     const connection = { host: "sample", port: 5432, user: "u", password: "", database: "db", sslMode: "prefer" };
-    await api.importDump("postgres", connection, "custom", "source.dump", false);
-    expect(fetcher).toHaveBeenCalledWith("/api/import", expect.objectContaining({ method: "POST", body: JSON.stringify({ engine: "postgres", connection, format: "custom", fileName: "source.dump", dropExisting: false, confirm: true }) }));
+    await api.importDump("postgres", connection, "custom", "source.dump", false, true);
+    expect(fetcher).toHaveBeenCalledWith("/api/import", expect.objectContaining({ method: "POST", body: JSON.stringify({ engine: "postgres", connection, format: "custom", fileName: "source.dump", dropExisting: false, disableForeignKeys: true, confirm: true }) }));
   });
 
   it("uploads the selected File with the exact reviewed target and flags", async () => {
     const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response('{}', { status: 200 }));
     const file = new File(["select 1;"], "sample.sql");
     const connection = { host: "sample", port: 3306, user: "u", password: "", database: "db", sslMode: "require" };
-    await api.importDump("mysql", connection, "sql", file, true);
+    await api.importDump("mysql", connection, "sql", file, true, false);
     const body = fetcher.mock.calls[0][1]?.body as FormData;
     expect(body.get("connection")).toBe(JSON.stringify(connection));
     expect(body.get("engine")).toBe("mysql");
     expect(body.get("confirm")).toBe("true");
     expect(body.get("dropExisting")).toBe("true");
+    expect(body.get("disableForeignKeys")).toBe("false");
     expect((body.get("file") as File).name).toBe("sample.sql");
   });
 });

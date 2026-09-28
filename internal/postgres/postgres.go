@@ -126,7 +126,7 @@ func (e *Engine) Import(ctx context.Context, cfg engine.Connection, opts engine.
 		return proc.Run(ctx, proc.RunOptions{
 			Path:  detected.Client.Path,
 			Args:  append(clientArgs(cfg), "--set", "ON_ERROR_STOP=1"),
-			Env:   clientEnv(cfg),
+			Env:   importEnv(cfg, opts.DisableForeignKeys),
 			Stdin: in,
 		})
 	case engine.FormatCustom:
@@ -141,7 +141,7 @@ func (e *Engine) Import(ctx context.Context, cfg engine.Connection, opts engine.
 		return proc.Run(ctx, proc.RunOptions{
 			Path: detected.Restore.Path,
 			Args: restoreArgs(cfg, opts.DropExisting, dumpPath),
-			Env:  clientEnv(cfg),
+			Env:  importEnv(cfg, opts.DisableForeignKeys),
 		})
 	default:
 		return fmt.Errorf("%w: %s", engine.ErrUnsupportedFormat, format)
@@ -258,6 +258,18 @@ func clientEnv(cfg engine.Connection) map[string]string {
 	}
 	if cfg.Password != "" {
 		env["PGPASSWORD"] = cfg.Password
+	}
+	return env
+}
+
+// importEnv runs the restore session with session_replication_role=replica,
+// which skips foreign key and user trigger enforcement for loaded rows. It
+// needs superuser (or an explicit grant) and does not skip the validation done
+// by ALTER TABLE ... ADD CONSTRAINT.
+func importEnv(cfg engine.Connection, disableForeignKeys bool) map[string]string {
+	env := clientEnv(cfg)
+	if disableForeignKeys {
+		env["PGOPTIONS"] += " -c session_replication_role=replica"
 	}
 	return env
 }

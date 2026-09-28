@@ -18,7 +18,7 @@ Reference for just-db 0.2.0, checked against the source on 2026-09-08. Commands 
 
 ## Release metadata
 
-These files currently identify version 0.2.0:
+These files currently identify version 0.3.0:
 
 | File | Used by |
 | --- | --- |

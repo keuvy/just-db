@@ -113,7 +113,7 @@ describe("restore review", () => {
     state.setDatabase("different_db");
     state.profile!.connection.host = "different_host";
     await job;
-    expect(api.importDump).toHaveBeenCalledWith("postgres", expect.objectContaining({ host: "localhost", database: "reviewed_db" }), "sql", file, true);
+    expect(api.importDump).toHaveBeenCalledWith("postgres", expect.objectContaining({ host: "localhost", database: "reviewed_db" }), "sql", file, true, false);
     expect(state.review).toBeNull();
     expect(operations.records[0]).toMatchObject({ profileName: "local-postgres", database: "reviewed_db", host: "localhost:5432" });
   });

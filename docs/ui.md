@@ -23,12 +23,14 @@ Database fields use searchable dropdowns and also accept a manually entered name
 **Restore** has three steps:
 
 1. Choose a local file or a file from the dump library.
-2. Choose the target profile and database, and decide whether to drop existing objects.
-3. Review the exact file, engine, host, account, database, and drop behavior before submitting.
+2. Choose the target profile and database, and decide whether to drop existing objects and whether to disable foreign key checks.
+3. Review the exact file, engine, host, account, database, drop behavior, and foreign key setting before submitting.
 
 Accepted extensions are `.sql`, `.dump`, `.backup`, and `.pgdump`. File format is inferred from the extension. SQL does not identify its source engine, so the review requires an acknowledgment that the dump belongs to the target engine. Enabling drop-existing also requires typing the exact target database name. Changing the target or options invalidates the review. Browser files are uploaded only on submission and are temporary restore inputs. Desktop file selection opens a native dialog and passes the selected local path to the engine. Uploaded browser files are not added to the dump library.
 
 With drop-existing enabled, the review explains the selected behavior: PostgreSQL SQL restore resets the `public` schema, custom restore cleans objects in the archive, and MySQL restore drops base tables. SQL statements in the file can remove data even when drop-existing is unchecked. A failed restore can leave partial changes; its result calls this out.
+
+Disabling foreign key checks lets a dump load rows whose parents come later or are missing. It applies only to the restore session. MySQL/MariaDB runs with `FOREIGN_KEY_CHECKS=0`; PostgreSQL runs with `session_replication_role=replica`, which also skips triggers, needs a superuser, and does not skip validation when the dump adds a constraint.
 
 ![Restore review](ui-screenshots/restore-review.png)
 

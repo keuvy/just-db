@@ -41,12 +41,13 @@ type exportRequest struct {
 }
 
 type importRequest struct {
-	Engine       engine.Name   `json:"engine"`
-	Connection   apiConnection `json:"connection"`
-	Format       string        `json:"format"`
-	FileName     string        `json:"fileName"`
-	DropExisting bool          `json:"dropExisting"`
-	Confirm      bool          `json:"confirm"`
+	Engine             engine.Name   `json:"engine"`
+	Connection         apiConnection `json:"connection"`
+	Format             string        `json:"format"`
+	FileName           string        `json:"fileName"`
+	DropExisting       bool          `json:"dropExisting"`
+	DisableForeignKeys bool          `json:"disableForeignKeys"`
+	Confirm            bool          `json:"confirm"`
 }
 
 func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
@@ -157,9 +158,10 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := job.ImportFromFile(r.Context(), eng, req.Connection.toEngine(), engine.ImportOptions{
-		Format:       req.Format,
-		DropExisting: req.DropExisting,
-		Confirm:      req.Confirm,
+		Format:             req.Format,
+		DropExisting:       req.DropExisting,
+		DisableForeignKeys: req.DisableForeignKeys,
+		Confirm:            req.Confirm,
 	}, path); err != nil {
 		writeError(w, statusFor(err), err)
 		return
@@ -215,9 +217,10 @@ func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := job.ImportFromFile(r.Context(), eng, conn.toEngine(), engine.ImportOptions{
-		Format:       r.FormValue("format"),
-		DropExisting: formTrue(r.FormValue("dropExisting")),
-		Confirm:      formTrue(r.FormValue("confirm")),
+		Format:             r.FormValue("format"),
+		DropExisting:       formTrue(r.FormValue("dropExisting")),
+		DisableForeignKeys: formTrue(r.FormValue("disableForeignKeys")),
+		Confirm:            formTrue(r.FormValue("confirm")),
 	}, tmpName); err != nil {
 		writeError(w, statusFor(err), err)
 		return

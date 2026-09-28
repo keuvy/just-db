@@ -71,7 +71,7 @@ make dmg
 
 `make dmg` checks macOS and packager availability before compiling. It then requests `darwin/universal` and stages only `just-db.app`, excluding unrelated build outputs. The DMG contains an Applications shortcut, a background, and drag-to-install instructions. Packaging uses Finder to arrange the window and needs a logged-in macOS desktop session; approve the terminal's Finder automation request if prompted by macOS.
 
-Version 0.2.0 produces `dist/just-db-0.2.0.dmg`. The default version is read from `info.productVersion` in `desktop/wails.json`. The packager replaces an existing file for that version only after the new image succeeds; a failed packaging run retains the previous DMG.
+Version 0.3.0 produces `dist/just-db-0.3.0.dmg`. The default version is read from `info.productVersion` in `desktop/wails.json`. The packager replaces an existing file for that version only after the new image succeeds; a failed packaging run retains the previous DMG.
 
 Useful variations:
 
@@ -80,7 +80,7 @@ Useful variations:
 make dmg CREATE_DMG=/path/to/create-dmg
 
 # Repackage an existing app without compiling it.
-bash desktop/packaging/macos/create-dmg.sh 0.2.0
+bash desktop/packaging/macos/create-dmg.sh 0.3.0
 
 # Inspect the architectures actually present in the built app.
 lipo -archs desktop/build/bin/just-db.app/Contents/MacOS/just-db-desktop

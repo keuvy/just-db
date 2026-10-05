@@ -26,7 +26,7 @@ func IsDumpName(name string) bool {
 
 func isDumpName(name string) bool {
 	switch strings.ToLower(filepath.Ext(name)) {
-	case ".sql", ".dump", ".backup", ".pgdump":
+	case ".sql", ".dump", ".backup", ".pgdump", ".gz", ".zip":
 		return true
 	default:
 		return false
@@ -143,16 +143,15 @@ func ImportFromFile(ctx context.Context, eng engine.Engine, cfg engine.Connectio
 	if !opts.Confirm {
 		return engine.ErrImportNotConfirmed
 	}
-	format := engine.CoerceFormat(eng.Name(), engine.InferFormat(path, opts.Format))
-	if format == "" {
-		return fmt.Errorf("%w: cannot infer format from %s", engine.ErrUnsupportedFormat, path)
-	}
-	opts.Format = format
-	file, err := os.Open(path)
+	file, format, cleanup, err := openImportFile(ctx, path, opts.Format)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer cleanup()
+	if isCompressedDump(path) && eng.Name() == engine.MySQL && format == engine.FormatCustom {
+		return fmt.Errorf("%w: MySQL / MariaDB requires a SQL dump", engine.ErrUnsupportedFormat)
+	}
+	opts.Format = engine.CoerceFormat(eng.Name(), format)
 	return eng.Import(ctx, cfg, opts, file)
 }
 

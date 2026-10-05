@@ -28,7 +28,10 @@ export function message(error: unknown, password = ""): string {
   return text.replace(/((?:password|PGPASSWORD|MYSQL_PWD)\s*[=:]\s*)[^\s,;]+/gi, "$1[redacted]");
 }
 
+export const dumpFileError = "Choose a .sql, .dump, .backup, .pgdump, .gz, or .zip file.";
+
 export function fileFormat(name: string): string {
+  if (/\.(gz|zip)$/i.test(name)) return "auto";
   if (/\.sql$/i.test(name)) return "sql";
   return /\.(dump|backup|pgdump)$/i.test(name) ? "custom" : "";
 }
@@ -36,6 +39,8 @@ export function fileFormat(name: string): string {
 export function requiredTool(engines: EngineInfo[], engine: string, operation: "export" | "restore" | "client", format = ""): string {
   const info = engines.find(item => item.name === engine);
   if (!info) return "Tool availability has not loaded. Refresh tools in settings.";
+  // The backend selects the executable after inspecting compressed contents.
+  if (operation === "restore" && format === "auto" && engine !== "mysql" && (info.tools.client.found || info.tools.restore.found)) return "";
   const kind = operation === "export" ? "dump" : operation === "client" || engine === "mysql" || format === "sql" ? "client" : "restore";
   const tool = info.tools[kind];
   return tool.found ? "" : `${tool.name} is missing on the app host. Open Tools & settings for details.`;
@@ -43,6 +48,7 @@ export function requiredTool(engines: EngineInfo[], engine: string, operation: "
 
 export function dropExplanation(engine: string, format: string): string {
   if (engine === "mysql") return "Drops all base tables in the target database before running the SQL file.";
+  if (format === "auto") return "After decompression, SQL dumps drop the public schema with CASCADE, recreate it, and reapply grants. PostgreSQL custom dumps drop the objects restored from the archive. Objects depending on the public schema can also be removed.";
   if (format === "sql") return "Drops the public schema with CASCADE, recreates it, and reapplies grants before running the SQL file. Objects depending on this schema can also be removed.";
   return "Drops existing objects restored from this archive using pg_restore --clean --if-exists.";
 }
@@ -240,8 +246,8 @@ export class Workspace {
     if (!profile || this.profileLoading || !database) throw new Error("Choose a target profile and database.");
     if (!this.source) throw new Error("Choose a source file.");
     const format = fileFormat(this.source.name);
-    if (!format) throw new Error("Choose a .sql, .dump, .backup, or .pgdump file.");
-    if (profile.engine === "mysql" && format !== "sql") throw new Error("MySQL / MariaDB requires a SQL dump. Custom archives are for PostgreSQL.");
+    if (!format) throw new Error(dumpFileError);
+    if (profile.engine === "mysql" && format === "custom") throw new Error("MySQL / MariaDB requires a SQL dump. Custom archives are for PostgreSQL.");
     const toolError = requiredTool(this.engines.data, profile.engine, "restore", format);
     if (toolError) throw new Error(toolError);
     this.restoreNotice = undefined;
@@ -253,6 +259,6 @@ export class Workspace {
   }
 
   canRestore(): boolean {
-    return Boolean(this.review && (this.review.format !== "sql" || this.acknowledged) && (!this.review.dropExisting || this.confirmation === this.review.connection.database));
+    return Boolean(this.review && (this.review.format === "custom" || this.acknowledged) && (!this.review.dropExisting || this.confirmation === this.review.connection.database));
   }
 }

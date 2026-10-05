@@ -7,7 +7,7 @@ Two binaries share one Go engine:
 - `just-db serve` — web UI for EasyPanel / Docker
 - Wails desktop app — native window on Debian, Fedora, Arch, and macOS
 
-SQLite is not implemented in version 0.3.0.
+SQLite is not implemented in version 0.3.1.
 
 Guides and current limitations: [documentation index](docs/README.md).
 
@@ -34,6 +34,8 @@ go run ./cmd/just-db export -engine mysql -host 127.0.0.1 -port 3306 -user justd
 go run ./cmd/just-db import -engine mysql -host 127.0.0.1 -port 3306 -user justdb -database justdb -in ./data/backups/app.sql -confirm
 ```
 
+Imports also accept `.gz` files containing SQL or PostgreSQL custom dumps, and `.zip` archives containing exactly one `.sql`, `.dump`, `.backup`, or `.pgdump` file. The app detects the decompressed format, validates the archive before restoring, and removes the temporary extracted file afterward. The host needs temporary disk space for the decompressed dump. MySQL / MariaDB accepts SQL contents only.
+
 Password: `-password`, or the environment fallbacks `JUSTDB_PASSWORD`, `PGPASSWORD`, and `MYSQL_PWD`. The engines pass PostgreSQL passwords through the child environment and MySQL passwords through a temporary defaults file.
 
 For PostgreSQL backups intended to restore to the same server major, use matching-major client tools. The app currently selects the first executables found, without automatic version matching. See [tool discovery and version troubleshooting](docs/troubleshooting.md).
@@ -52,7 +54,7 @@ wails doctor
 make desktop
 ```
 
-The GUI executable is **`just-db-desktop`**; the macOS bundle is `desktop/build/bin/just-db.app`. For a universal Intel/Apple Silicon installer, install `create-dmg` and run `make dmg`. Version 0.3.0 produces `dist/just-db-0.3.0.dmg`. Details: [desktop builds and packaging](docs/desktop.md).
+The GUI executable is **`just-db-desktop`**; the macOS bundle is `desktop/build/bin/just-db.app`. For a universal Intel/Apple Silicon installer, install `create-dmg` and run `make dmg`. Version 0.3.1 produces `dist/just-db-0.3.1.dmg`. Details: [desktop builds and packaging](docs/desktop.md).
 
 ## EasyPanel
 

@@ -33,6 +33,32 @@ async function start() {
 }
 
 describe("rendered workflows", () => {
+  it.each(["source.sql.gz", "source.zip"])("reviews and submits compressed file %s", async name => {
+    const { app, client } = await start();
+    client.importDump = vi.fn().mockResolvedValue(undefined);
+    click("#tab-restore");
+    const input = document.querySelector<HTMLInputElement>("#restore-file")!;
+    expect(input.accept).toContain(".gz,.zip");
+    const file = new File(["compressed fixture"], name);
+    Object.defineProperty(input, "files", { value: [file] });
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(app.state.source?.name).toBe(name);
+    expect(document.querySelector(".selected-file")?.textContent).toContain("format detected after decompression");
+    click("#restore-next-source");
+    change("#drop-existing", true);
+    click("#restore-next-target");
+    expect(document.querySelector(".review-summary")?.textContent).toContain("Automatic");
+    expect(document.body.textContent).toContain("public schema with CASCADE");
+    const submit = document.querySelector<HTMLButtonElement>("#restore-submit")!;
+    expect(submit.disabled).toBe(true);
+    change("#restore-ack", true);
+    expect(submit.disabled).toBe(true);
+    type("#restore-confirm-name", app.state.review!.connection.database);
+    expect(submit.disabled).toBe(false);
+    click("#restore-submit");
+    await vi.waitFor(() => expect(client.importDump).toHaveBeenCalledWith("postgres", expect.any(Object), "auto", file, true, false));
+  });
+
   it("saves engine, SSL mode and discovered database choices through the custom controls", async () => {
     const { client } = await start();
     const put = vi.spyOn(client, "putProfile");

@@ -73,7 +73,7 @@ Use `/health` for container liveness checks. Its success does not establish data
 ## Persistent data
 
 ```text
-/data/backups/       Dump library: .sql, .dump, .backup, .pgdump
+/data/backups/       Dump library: .sql, .dump, .backup, .pgdump, .gz, .zip
 /data/profiles/      Encrypted .jdb connection profiles
 /data/profiles/key   Generated key when no environment key is supplied
 ```

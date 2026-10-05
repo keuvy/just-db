@@ -1,5 +1,5 @@
 import type { Client } from "./client";
-import { Workspace, fileFormat, message, requiredTool, type Notice, type View } from "./state";
+import { Workspace, dumpFileError, fileFormat, message, requiredTool, type Notice, type View } from "./state";
 import { Operations } from "./operations";
 import { destination } from "./navigation";
 import { Appearance, type Theme } from "./theme";
@@ -257,7 +257,7 @@ export class Application {
   };
 
   private acceptFile(file: File): void {
-    if (!fileFormat(file.name)) { this.state.setSource(null); this.state.restoreNotice = { kind: "error", text: "Choose a .sql, .dump, .backup, or .pgdump file." }; }
+    if (!fileFormat(file.name)) { this.state.setSource(null); this.state.restoreNotice = { kind: "error", text: dumpFileError }; }
     else this.state.setSource({ name: file.name, value: file, library: false, size: file.size });
     this.renderPage();
   }
@@ -270,7 +270,7 @@ export class Application {
       const path = await this.api.pickOpenPath();
       if (path) {
         const name = path.split(/[\\/]/).pop()!;
-        if (!fileFormat(name)) throw new Error("Choose a .sql, .dump, .backup, or .pgdump file.");
+        if (!fileFormat(name)) throw new Error(dumpFileError);
         this.state.setSource({ name, value: path, library: false });
       }
     } catch (error) { this.state.restoreNotice = { kind: "error", text: message(error) }; }

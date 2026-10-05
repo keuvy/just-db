@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { Workspace, requiredTool } from "../src/app/state";
+import { Workspace, fileFormat, requiredTool } from "../src/app/state";
 import { Operations } from "../src/app/operations";
 import { createPreviewClient } from "../src/preview";
 import type { Profile } from "../src/api";
@@ -95,6 +95,30 @@ describe("profile and database state", () => {
 });
 
 describe("restore review", () => {
+  it.each(["backup.sql.gz", "backup.GZ", "backup.ZIP"])("reviews %s with automatic format detection and acknowledgment", async name => {
+    const { state } = await ready();
+    expect(fileFormat(name)).toBe("auto");
+    state.setSource({ name, value: name, library: true });
+    expect(state.prepareReview().format).toBe("auto");
+    expect(state.canRestore()).toBe(false);
+    state.acknowledged = true;
+    expect(state.canRestore()).toBe(true);
+    await state.selectProfile("staging-mysql");
+    expect(state.prepareReview().format).toBe("auto");
+    expect(state.canRestore()).toBe(false);
+    state.acknowledged = true;
+    expect(state.canRestore()).toBe(true);
+  });
+
+  it("defers compressed PostgreSQL tool selection until the format is known", async () => {
+    const { state } = await ready();
+    const postgres = state.engines.data.find(info => info.name === "postgres")!;
+    postgres.tools.restore.found = false;
+    expect(requiredTool(state.engines.data, "postgres", "restore", "auto")).toBe("");
+    postgres.tools.client.found = false;
+    expect(requiredTool(state.engines.data, "postgres", "restore", "auto")).toContain("missing");
+  });
+
   it("freezes the reviewed target and submits exactly that snapshot", async () => {
     const { api, state } = await ready();
     const file = new File(["-- sample"], "source.sql");

@@ -174,7 +174,7 @@ func cmdImport(args []string) error {
 	data := registerDataFlag(fs)
 	profileName := registerProfileFlag(fs)
 	c := registerConnFlags(fs)
-	inPath := fs.String("in", "", "dump file")
+	inPath := fs.String("in", "", "dump file (.sql, .dump, .backup, .pgdump, .gz, or .zip)")
 	format := fs.String("format", "", "sql or custom (inferred from file if empty)")
 	drop := fs.Bool("drop", false, "drop existing objects before restore")
 	noFK := fs.Bool("no-fk-checks", false, "disable foreign key checks during restore")

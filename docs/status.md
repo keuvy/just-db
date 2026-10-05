@@ -101,7 +101,7 @@ Routes are defined in [`server/server.go`](../server/server.go); payloads and fi
 | POST | `/api/export` | Export `{engine, connection, format, fileName, tables}` and return path/size/format |
 | POST | `/api/import` | Restore a stored dump via JSON or a browser upload via multipart |
 
-Import JSON uses `engine`, `connection`, `format`, `fileName`, `dropExisting`, `disableForeignKeys`, and `confirm`. Multipart uses the same connection/options fields plus `file`; `connection` is JSON text. Uploads accept `.sql`, `.dump`, `.backup`, and `.pgdump`, are copied to temporary storage, and are removed after the request. The 32 MiB multipart setting is a memory threshold, not a maximum upload size.
+Import JSON uses `engine`, `connection`, `format`, `fileName`, `dropExisting`, `disableForeignKeys`, and `confirm`. Multipart uses the same connection/options fields plus `file`; `connection` is JSON text. Uploads accept `.sql`, `.dump`, `.backup`, `.pgdump`, `.gz`, and `.zip`, are copied to temporary storage, and are removed after the request. Compressed imports accept `format: "auto"` or an omitted format to detect SQL or PostgreSQL custom contents after decompression. ZIP archives must contain exactly one supported dump. The 32 MiB multipart setting is a memory threshold, not a maximum upload size.
 
 Setting `JUSTDB_AUTH_USER` enables basic authentication. Both health paths bypass basic auth, but only `/health` bypasses the IP allowlist. `/api/health` remains subject to `JUSTDB_ALLOWED_IPS`. The UI, downloads, defaults, and profiles use the same access controls. Full profiles and web defaults can contain database passwords.
 
@@ -111,6 +111,6 @@ Exports log `export started`, `export completed`, or `export failed` with a requ
 
 Profiles are `{dataDir}/profiles/<name>.jdb`. The name is the identity; saving the same name overwrites it. The store uses AES-256-GCM with an environment-supplied key or a generated key file. See the [encryption decision](adr/0001-encrypted-profiles.md) and [recovery guidance](troubleshooting.md#profiles-missing-or-cannot-decrypt-profile).
 
-Dumps are `{dataDir}/backups/`. The library accepts regular `.sql`, `.dump`, `.backup`, and `.pgdump` files and does not record server version, source engine, or profile provenance. Export creates a library file before the UI offers a download or native save-copy dialog. Cancelling that dialog keeps the original. Failed exports remove the output file.
+Dumps are `{dataDir}/backups/`. The library accepts regular `.sql`, `.dump`, `.backup`, `.pgdump`, `.gz`, and `.zip` files and does not record server version, source engine, or profile provenance. Export creates a library file before the UI offers a download or native save-copy dialog. Cancelling that dialog keeps the original. Failed exports remove the output file.
 
 Desktop storage is `~/Library/Application Support/just-db` on macOS, and `$XDG_DATA_HOME/just-db` or `~/.local/share/just-db` on Linux. Desktop and CLI profiles are separate unless the CLI is pointed at the desktop data directory. See [desktop setup](desktop.md) and [testing](testing.md).

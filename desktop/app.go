@@ -163,7 +163,7 @@ func (a *App) PickOpenPath() (string, error) {
 		Title:            "Import file",
 		DefaultDirectory: dir,
 		Filters: []runtime.FileFilter{
-			{DisplayName: "SQL or dump", Pattern: "*.dump;*.sql;*.backup;*.pgdump"},
+			{DisplayName: "SQL, dump, or compressed dump", Pattern: "*.dump;*.sql;*.backup;*.pgdump;*.gz;*.zip"},
 		},
 	})
 }

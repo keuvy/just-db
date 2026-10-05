@@ -8,12 +8,12 @@ import (
 )
 
 func TestIsDumpName(t *testing.T) {
-	for _, name := range []string{"app.sql", "app.dump", "app.backup", "app.pgdump", "APP.SQL"} {
+	for _, name := range []string{"app.sql", "app.dump", "app.backup", "app.pgdump", "APP.SQL", "app.sql.gz", "app.GZ", "app.ZIP"} {
 		if !IsDumpName(name) {
 			t.Fatalf("%s should be a dump name", name)
 		}
 	}
-	for _, name := range []string{"notes.txt", "app", "app.dump.exe"} {
+	for _, name := range []string{"notes.txt", "app", "app.dump.exe", "app.gz.exe"} {
 		if IsDumpName(name) {
 			t.Fatalf("%s should not be a dump name", name)
 		}

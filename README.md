@@ -7,7 +7,7 @@ Two binaries share one Go engine:
 - `just-db serve` — web UI for EasyPanel / Docker
 - Wails desktop app — native window on Debian, Fedora, Arch, and macOS
 
-SQLite is not implemented in version 0.3.1.
+SQLite is not implemented in version 0.4.0.
 
 Guides and current limitations: [documentation index](docs/README.md).
 
@@ -54,7 +54,17 @@ wails doctor
 make desktop
 ```
 
-The GUI executable is **`just-db-desktop`**; the macOS bundle is `desktop/build/bin/just-db.app`. For a universal Intel/Apple Silicon installer, install `create-dmg` and run `make dmg`. Version 0.3.1 produces `dist/just-db-0.3.1.dmg`. Details: [desktop builds and packaging](docs/desktop.md).
+The GUI executable is **`just-db-desktop`**; the macOS bundle is `desktop/build/bin/just-db.app`. For a universal Intel/Apple Silicon installer, install `create-dmg` and run `make dmg`. Version 0.4.0 produces `dist/just-db-0.4.0.dmg`. Details: [desktop builds and packaging](docs/desktop.md).
+
+To build the Linux x86-64 desktop executable and `.deb`/`.rpm` installers from
+macOS with Docker running:
+
+```bash
+make package-linux-docker
+```
+
+Artifacts are exported to `dist/linux-amd64/`. See [Linux build requirements and
+verification limits](docs/desktop.md#build-on-macos-with-docker).
 
 ## EasyPanel
 

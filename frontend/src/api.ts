@@ -85,7 +85,7 @@ type WailsApp = {
   ImportDump: (
     name: string,
     cfg: Connection,
-    opts: { format: string; dropExisting: boolean; disableForeignKeys: boolean; confirm: boolean },
+    opts: { format: string; dropExisting: boolean; disableForeignKeys: boolean; createDatabase: boolean; confirm: boolean },
     srcPath: string,
   ) => Promise<void>;
   ListDumps: (dir: string) => Promise<DumpFile[]>;
@@ -194,6 +194,7 @@ export async function importDump(
   source: string | File,
   dropExisting: boolean,
   disableForeignKeys: boolean,
+  createDatabase = false,
 ): Promise<void> {
   const app = wailsApp();
   if (app?.ImportDump) {
@@ -204,7 +205,7 @@ export async function importDump(
     if (!src) {
       throw new Error("open cancelled");
     }
-    await app.ImportDump(engine, connection, { format, dropExisting, disableForeignKeys, confirm: true }, src);
+    await app.ImportDump(engine, connection, { format, dropExisting, disableForeignKeys, createDatabase, confirm: true }, src);
     return;
   }
   if (source instanceof File) {
@@ -214,6 +215,7 @@ export async function importDump(
     form.append("format", format);
     form.append("dropExisting", dropExisting ? "true" : "false");
     form.append("disableForeignKeys", disableForeignKeys ? "true" : "false");
+    form.append("createDatabase", createDatabase ? "true" : "false");
     form.append("confirm", "true");
     form.append("file", source, source.name);
     const response = await fetch("/api/import", { method: "POST", body: form });
@@ -232,6 +234,7 @@ export async function importDump(
       fileName: source,
       dropExisting,
       disableForeignKeys,
+      createDatabase,
       confirm: true,
     }),
   });

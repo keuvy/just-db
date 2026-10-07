@@ -71,7 +71,7 @@ make dmg
 
 `make dmg` checks macOS and packager availability before compiling. It then requests `darwin/universal` and stages only `just-db.app`, excluding unrelated build outputs. The DMG contains an Applications shortcut, a background, and drag-to-install instructions. Packaging uses Finder to arrange the window and needs a logged-in macOS desktop session; approve the terminal's Finder automation request if prompted by macOS.
 
-Version 0.3.1 produces `dist/just-db-0.3.1.dmg`. The default version is read from `info.productVersion` in `desktop/wails.json`. The packager replaces an existing file for that version only after the new image succeeds; a failed packaging run retains the previous DMG.
+Version 0.4.0 produces `dist/just-db-0.4.0.dmg`. The default version is read from `info.productVersion` in `desktop/wails.json`. The packager replaces an existing file for that version only after the new image succeeds; a failed packaging run retains the previous DMG.
 
 Useful variations:
 
@@ -80,7 +80,7 @@ Useful variations:
 make dmg CREATE_DMG=/path/to/create-dmg
 
 # Repackage an existing app without compiling it.
-bash desktop/packaging/macos/create-dmg.sh 0.3.1
+bash desktop/packaging/macos/create-dmg.sh 0.4.0
 
 # Inspect the architectures actually present in the built app.
 lipo -archs desktop/build/bin/just-db.app/Contents/MacOS/just-db-desktop
@@ -100,13 +100,46 @@ The repository does not configure Developer ID signing or Apple notarization. Ea
 
 ## Linux packages
 
+### Build on macOS with Docker
+
+With Docker running, build Linux x86-64 artifacts from the repository root:
+
+```bash
+make package-linux-docker
+```
+
+This installs the Linux build tools inside a Debian 12 container, runs frontend
+tests and Go tests excluding database roundtrips, then builds the Wails app with
+WebKitGTK 4.1. No host Go, Node.js, Wails, or nFPM installation is needed. The
+first build downloads the toolchains and Linux libraries; later builds reuse
+Docker's cache. The source, local frontend dependencies, and macOS app stay on
+the host without modification.
+
+Outputs are in `dist/linux-amd64/`:
+
+- `just-db-desktop`, the Linux executable
+- `.deb` and `.rpm` installers, using the version from `desktop/wails.json`
+- `SHA256SUMS`, executable information, and a shared-library report
+
+The build checks the executable architecture, linked libraries, and package
+contents. The installers declare GTK 3, WebKitGTK 4.1, and glibc 2.36 or newer
+as dependencies. Use Debian 12 or a compatible newer Linux distribution;
+older distributions and WebKitGTK 4.0-only systems are not targets of this build.
+Database clients remain recommended packages, so install the clients you use.
+
+Docker exports only the generated files and does not push an image or load
+`.env`. This checks compilation and packaging. Test installation, the native
+window, dialogs, and database operations on a Linux desktop before release.
+
+### Build directly on Linux
+
 Install [nfpm](https://nfpm.goreleaser.com/), then run from the repository root:
 
 ```bash
 make package-linux
 ```
 
-This builds the desktop app and creates both `.deb` and `.rpm` files in `dist/`. There is no `make rpm` target. The current [`nfpm.yaml`](../desktop/packaging/nfpm.yaml) declares version 0.2.0 and `amd64`; changing the Wails target alone does not update that package metadata.
+This builds the desktop app and creates both `.deb` and `.rpm` files in `dist/`. There is no `make rpm` target. The current [`nfpm.yaml`](../desktop/packaging/nfpm.yaml) declares version 0.4.0 and `amd64`; changing the Wails target alone does not update that package metadata.
 
 ```bash
 sudo apt install ./dist/just-db-desktop_*.deb

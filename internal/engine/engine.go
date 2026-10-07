@@ -87,6 +87,7 @@ type ExportOptions struct {
 
 type ImportOptions struct {
 	Format             string `json:"format"`
+	CreateDatabase     bool   `json:"createDatabase"`
 	DropExisting       bool   `json:"dropExisting"`
 	DisableForeignKeys bool   `json:"disableForeignKeys"`
 	Confirm            bool   `json:"confirm"`

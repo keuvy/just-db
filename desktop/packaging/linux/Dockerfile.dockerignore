@@ -1,0 +1,16 @@
+# Only build inputs belong in the context, not local data or generated builds.
+**
+!go.mod
+!go.sum
+!cmd/**
+!internal/**
+!server/**
+!frontend/**
+!desktop/**
+frontend/node_modules
+frontend/dist
+frontend/wailsjs
+frontend/package.json.md5
+desktop/build
+**/.DS_Store
+**/.env

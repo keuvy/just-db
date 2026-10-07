@@ -118,6 +118,11 @@ func (e *Engine) Import(ctx context.Context, cfg engine.Connection, opts engine.
 		if !detected.Client.Found {
 			return fmt.Errorf("%w: psql", engine.ErrToolsMissing)
 		}
+		if opts.CreateDatabase {
+			if err := e.createDatabase(ctx, cfg, detected.Client); err != nil {
+				return err
+			}
+		}
 		if opts.DropExisting {
 			if err := e.resetPublicSchema(ctx, cfg, detected.Client.Path); err != nil {
 				return err
@@ -138,6 +143,11 @@ func (e *Engine) Import(ctx context.Context, cfg engine.Connection, opts engine.
 			return err
 		}
 		defer cleanup()
+		if opts.CreateDatabase {
+			if err := e.createDatabase(ctx, cfg, detected.Client); err != nil {
+				return err
+			}
+		}
 		return proc.Run(ctx, proc.RunOptions{
 			Path: detected.Restore.Path,
 			Args: restoreArgs(cfg, opts.DropExisting, dumpPath),
@@ -146,6 +156,31 @@ func (e *Engine) Import(ctx context.Context, cfg engine.Connection, opts engine.
 	default:
 		return fmt.Errorf("%w: %s", engine.ErrUnsupportedFormat, format)
 	}
+}
+
+func (e *Engine) createDatabase(ctx context.Context, cfg engine.Connection, client engine.Tool) error {
+	if !client.Found {
+		return fmt.Errorf("%w: psql is required to create a database", engine.ErrToolsMissing)
+	}
+	name := cfg.Database
+	// PostgreSQL truncates long identifiers. Reject them so the restore cannot
+	// accidentally target a different database from the one it created.
+	if len(name) > 63 || strings.ContainsRune(name, 0) {
+		return fmt.Errorf("%w: database name must be at most 63 bytes and contain no null characters", engine.ErrInvalidConnection)
+	}
+	cfg.Database = "postgres"
+	if name == cfg.Database {
+		cfg.Database = "template1"
+	}
+	sql := `CREATE DATABASE "` + strings.ReplaceAll(name, `"`, `""`) + `"`
+	if err := proc.Run(ctx, proc.RunOptions{
+		Path: client.Path,
+		Args: append(clientArgs(cfg), "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "--command", sql),
+		Env:  clientEnv(cfg),
+	}); err != nil {
+		return fmt.Errorf("create database: %w", err)
+	}
+	return nil
 }
 
 func (e *Engine) prepare(ctx context.Context, cfg engine.Connection) (engine.Connection, engine.Tools, error) {

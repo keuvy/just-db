@@ -107,6 +107,11 @@ func (e *Engine) Import(ctx context.Context, cfg engine.Connection, opts engine.
 	if _, err := mysqlFormat(opts.Format); err != nil {
 		return err
 	}
+	if opts.CreateDatabase {
+		if err := e.createDatabase(ctx, cfg, detected.Client, defaults); err != nil {
+			return err
+		}
+	}
 	if opts.DropExisting {
 		if err := e.dropTables(ctx, cfg, detected.Client, defaults); err != nil {
 			return err
@@ -117,6 +122,21 @@ func (e *Engine) Import(ctx context.Context, cfg engine.Connection, opts engine.
 		Args:  importArgs(defaults, cfg, detected.Client, opts.DisableForeignKeys),
 		Stdin: in,
 	})
+}
+
+func (e *Engine) createDatabase(ctx context.Context, cfg engine.Connection, client engine.Tool, defaults string) error {
+	name := cfg.Database
+	if strings.ContainsRune(name, 0) {
+		return fmt.Errorf("%w: database name contains a null character", engine.ErrInvalidConnection)
+	}
+	cfg.Database = ""
+	if err := proc.Run(ctx, proc.RunOptions{
+		Path: client.Path,
+		Args: append(clientArgs(defaults, cfg, client), "--execute", "CREATE DATABASE "+quoteIdent(name)),
+	}); err != nil {
+		return fmt.Errorf("create database: %w", err)
+	}
+	return nil
 }
 
 func (e *Engine) prepare(ctx context.Context, cfg engine.Connection) (engine.Connection, engine.Tools, string, func(), error) {

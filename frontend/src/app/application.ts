@@ -200,6 +200,11 @@ export class Application {
       if (next) next.disabled = !input.value.trim() || !this.state.profile;
     }
     if (input.id === "restore-confirm-name") { this.state.confirmation = input.value; this.updateRestoreButton(); }
+    if (input.id === "restore-new-database") {
+      this.state.setNewDatabase(input.value);
+      const next = this.root.querySelector<HTMLButtonElement>("#restore-next-target");
+      if (next) next.disabled = !this.state.restoreDatabase || !this.state.profile;
+    }
   };
 
   private changed = (event: Event): void => {
@@ -213,6 +218,7 @@ export class Application {
       this.renderPage();
     }
     if (input.id === "drop-existing") { this.state.dropExisting = input.checked; this.state.invalidateReview(); }
+    if (input.name === "restore-target-mode") { this.state.setCreateDatabase(input.value === "new"); this.renderPage(); }
     if (input.id === "disable-foreign-keys") { this.state.disableForeignKeys = input.checked; this.state.invalidateReview(); }
     if (input.id === "restore-ack") { this.state.acknowledged = input.checked; this.updateRestoreButton(); }
     if (input.id === "dump-sort") { this.dumpSort = input.value as DumpSort; replaceRegion(this.mount("dump-rows"), dumpRows(this.state, this.operations, this.dumpSearch, this.dumpSort, this.fileBusy)); }

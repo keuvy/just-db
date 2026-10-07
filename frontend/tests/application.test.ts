@@ -33,6 +33,34 @@ async function start() {
 }
 
 describe("rendered workflows", () => {
+  it.each(["local-postgres", "staging-mysql"])("creates a new restore target for %s only after review", async profile => {
+    const { app, client } = await start();
+    await app.state.selectProfile(profile);
+    client.importDump = vi.fn().mockResolvedValue(undefined);
+    app.state.mode = "restore";
+    app.state.setSource({ name: "source.sql", value: "source.sql", library: true });
+    app.state.restoreStep = 2;
+    app.state.dropExisting = true;
+    app.render();
+    click('[name="restore-target-mode"][value="new"]');
+    expect(document.querySelector("#workspace-database")).toBeNull();
+    expect(document.querySelector("#drop-existing")).toBeNull();
+    expect(document.querySelector<HTMLButtonElement>("#restore-next-target")!.disabled).toBe(true);
+    type("#restore-new-database", "restore_copy");
+    click("#restore-next-target");
+    expect(document.querySelector(".review-summary")?.textContent).toContain("Before restore");
+    expect(client.importDump).not.toHaveBeenCalled();
+    click('[data-action="restore-back"]');
+    click('[name="restore-target-mode"][value="existing"]');
+    expect(document.querySelector<HTMLInputElement>("#workspace-database")!.value).toBe(app.state.session!.database);
+    click('[name="restore-target-mode"][value="new"]');
+    expect(document.querySelector<HTMLInputElement>("#restore-new-database")!.value).toBe("restore_copy");
+    click("#restore-next-target");
+    change("#restore-ack", true);
+    click("#restore-submit");
+    await vi.waitFor(() => expect(client.importDump).toHaveBeenCalledWith(app.state.profile!.engine, expect.objectContaining({ database: "restore_copy" }), "sql", "source.sql", false, false, true));
+  });
+
   it.each(["source.sql.gz", "source.zip"])("reviews and submits compressed file %s", async name => {
     const { app, client } = await start();
     client.importDump = vi.fn().mockResolvedValue(undefined);
@@ -56,7 +84,7 @@ describe("rendered workflows", () => {
     type("#restore-confirm-name", app.state.review!.connection.database);
     expect(submit.disabled).toBe(false);
     click("#restore-submit");
-    await vi.waitFor(() => expect(client.importDump).toHaveBeenCalledWith("postgres", expect.any(Object), "auto", file, true, false));
+    await vi.waitFor(() => expect(client.importDump).toHaveBeenCalledWith("postgres", expect.any(Object), "auto", file, true, false, false));
   });
 
   it("saves engine, SSL mode and discovered database choices through the custom controls", async () => {
@@ -140,7 +168,7 @@ describe("rendered workflows", () => {
     submit.click();
     expect(client.importDump).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(app.operations.active).toBeNull());
-    expect(client.importDump).toHaveBeenCalledWith("postgres", expect.objectContaining({ database: "target_db", host: "localhost" }), "sql", "source.sql", true, true);
+    expect(client.importDump).toHaveBeenCalledWith("postgres", expect.objectContaining({ database: "target_db", host: "localhost" }), "sql", "source.sql", true, true, false);
   });
 
   it("does not silently restore after changing the reviewed profile", async () => {
@@ -186,24 +214,37 @@ describe("rendered workflows", () => {
 });
 
 describe("HTTP import adapter", () => {
+  it("passes database creation to the desktop restore binding", async () => {
+    const importDump = vi.fn().mockResolvedValue(undefined);
+    const desktopWindow = window as unknown as { go?: unknown };
+    const previous = desktopWindow.go;
+    desktopWindow.go = { main: { App: { ImportDump: importDump } } };
+    try {
+      const connection = { host: "sample", port: 5432, user: "u", password: "", database: "new_db", sslMode: "prefer" };
+      await api.importDump("postgres", connection, "custom", "/tmp/source.dump", false, false, true);
+      expect(importDump).toHaveBeenCalledWith("postgres", connection, { format: "custom", dropExisting: false, disableForeignKeys: false, createDatabase: true, confirm: true }, "/tmp/source.dump");
+    } finally { desktopWindow.go = previous; }
+  });
+
   it("preserves the stored-file JSON contract", async () => {
     const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response('{}', { status: 200 }));
     const connection = { host: "sample", port: 5432, user: "u", password: "", database: "db", sslMode: "prefer" };
     await api.importDump("postgres", connection, "custom", "source.dump", false, true);
-    expect(fetcher).toHaveBeenCalledWith("/api/import", expect.objectContaining({ method: "POST", body: JSON.stringify({ engine: "postgres", connection, format: "custom", fileName: "source.dump", dropExisting: false, disableForeignKeys: true, confirm: true }) }));
+    expect(fetcher).toHaveBeenCalledWith("/api/import", expect.objectContaining({ method: "POST", body: JSON.stringify({ engine: "postgres", connection, format: "custom", fileName: "source.dump", dropExisting: false, disableForeignKeys: true, createDatabase: false, confirm: true }) }));
   });
 
   it("uploads the selected File with the exact reviewed target and flags", async () => {
     const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response('{}', { status: 200 }));
     const file = new File(["select 1;"], "sample.sql");
     const connection = { host: "sample", port: 3306, user: "u", password: "", database: "db", sslMode: "require" };
-    await api.importDump("mysql", connection, "sql", file, true, false);
+    await api.importDump("mysql", connection, "sql", file, true, false, true);
     const body = fetcher.mock.calls[0][1]?.body as FormData;
     expect(body.get("connection")).toBe(JSON.stringify(connection));
     expect(body.get("engine")).toBe("mysql");
     expect(body.get("confirm")).toBe("true");
     expect(body.get("dropExisting")).toBe("true");
     expect(body.get("disableForeignKeys")).toBe("false");
+    expect(body.get("createDatabase")).toBe("true");
     expect((body.get("file") as File).name).toBe("sample.sql");
   });
 });

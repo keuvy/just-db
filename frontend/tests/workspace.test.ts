@@ -95,6 +95,38 @@ describe("profile and database state", () => {
 });
 
 describe("restore review", () => {
+  it("reviews a new database without changing the export target or dropping objects", async () => {
+    const { api, state } = await ready();
+    state.setSource({ name: "source.dump", value: "source.dump", library: true });
+    state.dropExisting = true;
+    state.setCreateDatabase(true);
+    state.setNewDatabase(" new_restore ");
+    const review = state.prepareReview();
+    expect(review).toMatchObject({ createDatabase: true, dropExisting: false, connection: { database: "new_restore" } });
+    expect(state.session?.database).toBe("app_development");
+    api.importDump = vi.fn().mockResolvedValue(undefined);
+    state.setNewDatabase("later_name");
+    await new Operations(api).restore(review);
+    expect(api.importDump).toHaveBeenCalledWith("postgres", expect.objectContaining({ database: "new_restore" }), "custom", "source.dump", false, false, true);
+    expect(state.review).toBeNull();
+    state.setCreateDatabase(false);
+    expect(state.prepareReview().connection.database).toBe("app_development");
+  });
+
+  it("validates a new name and requires the client even for PostgreSQL custom archives", async () => {
+    const { state } = await ready();
+    state.setSource({ name: "source.dump", value: "source.dump", library: true });
+    state.setCreateDatabase(true);
+    expect(() => state.prepareReview()).toThrow("Choose a target");
+    state.setNewDatabase("app_development");
+    expect(() => state.prepareReview()).toThrow("already exists");
+    state.setNewDatabase("é".repeat(32));
+    expect(() => state.prepareReview()).toThrow("63 bytes");
+    state.setNewDatabase("new_restore");
+    state.engines.data.find(info => info.name === "postgres")!.tools.client.found = false;
+    expect(() => state.prepareReview()).toThrow("psql");
+  });
+
   it.each(["backup.sql.gz", "backup.GZ", "backup.ZIP"])("reviews %s with automatic format detection and acknowledgment", async name => {
     const { state } = await ready();
     expect(fileFormat(name)).toBe("auto");
@@ -137,7 +169,7 @@ describe("restore review", () => {
     state.setDatabase("different_db");
     state.profile!.connection.host = "different_host";
     await job;
-    expect(api.importDump).toHaveBeenCalledWith("postgres", expect.objectContaining({ host: "localhost", database: "reviewed_db" }), "sql", file, true, false);
+    expect(api.importDump).toHaveBeenCalledWith("postgres", expect.objectContaining({ host: "localhost", database: "reviewed_db" }), "sql", file, true, false, false);
     expect(state.review).toBeNull();
     expect(operations.records[0]).toMatchObject({ profileName: "local-postgres", database: "reviewed_db", host: "localhost:5432" });
   });

@@ -18,6 +18,7 @@ export type RestoreReview = Readonly<{
   connection: Readonly<Connection>;
   format: string;
   source: Source;
+  createDatabase: boolean;
   dropExisting: boolean;
   disableForeignKeys: boolean;
 }>;
@@ -76,6 +77,8 @@ export class Workspace {
   source: Source | null = null;
   sourceMode: "file" | "library" = "file";
   restoreStep = 1;
+  createDatabase = false;
+  newDatabase = "";
   dropExisting = false;
   disableForeignKeys = false;
   review: RestoreReview | null = null;
@@ -226,6 +229,20 @@ export class Workspace {
     this.invalidateReview();
   }
 
+  get restoreDatabase(): string {
+    return (this.createDatabase ? this.newDatabase : this.session?.database || "").trim();
+  }
+
+  setCreateDatabase(create: boolean): void {
+    this.createDatabase = create;
+    this.invalidateReview();
+  }
+
+  setNewDatabase(database: string): void {
+    this.newDatabase = database;
+    this.invalidateReview();
+  }
+
   setSource(source: Source | null): void {
     this.source = source;
     this.invalidateReview();
@@ -242,7 +259,7 @@ export class Workspace {
 
   prepareReview(): RestoreReview {
     const profile = this.profile;
-    const database = this.session?.database.trim();
+    const database = this.restoreDatabase;
     if (!profile || this.profileLoading || !database) throw new Error("Choose a target profile and database.");
     if (!this.source) throw new Error("Choose a source file.");
     const format = fileFormat(this.source.name);
@@ -250,8 +267,15 @@ export class Workspace {
     if (profile.engine === "mysql" && format === "custom") throw new Error("MySQL / MariaDB requires a SQL dump. Custom archives are for PostgreSQL.");
     const toolError = requiredTool(this.engines.data, profile.engine, "restore", format);
     if (toolError) throw new Error(toolError);
+    if (this.createDatabase) {
+      if (this.session?.databases.data.includes(database)) throw new Error("A database with this name already exists. Choose another name or use an existing database.");
+      if (database.includes("\0")) throw new Error("Database names cannot contain null characters.");
+      if (profile.engine === "postgres" && new TextEncoder().encode(database).length > 63) throw new Error("PostgreSQL database names must be at most 63 bytes.");
+      const clientError = requiredTool(this.engines.data, profile.engine, "client");
+      if (clientError) throw new Error(clientError);
+    }
     this.restoreNotice = undefined;
-    this.review = Object.freeze({ profileName: profile.name, engine: profile.engine, connection: Object.freeze({ ...profile.connection, database }), format, source: Object.freeze({ ...this.source }), dropExisting: this.dropExisting, disableForeignKeys: this.disableForeignKeys });
+    this.review = Object.freeze({ profileName: profile.name, engine: profile.engine, connection: Object.freeze({ ...profile.connection, database }), format, source: Object.freeze({ ...this.source }), createDatabase: this.createDatabase, dropExisting: !this.createDatabase && this.dropExisting, disableForeignKeys: this.disableForeignKeys });
     this.restoreStep = 3;
     this.acknowledged = false;
     this.confirmation = "";

@@ -67,6 +67,12 @@ git diff --check
 
 A dry run confirms recipe expansion, not successful compilation, executable architectures, signing, or Finder layout. Actual packaging commands and output paths are in the [desktop guide](desktop.md).
 
+`make package-linux-docker` runs frontend tests, a production frontend build,
+and Go tests excluding database roundtrips inside Linux. It then builds the
+desktop executable, checks its x86-64 architecture and linked libraries, and
+inspects both installer packages. The artifacts and checksums are exported to
+`dist/linux-amd64/`. This does not test installation or native desktop behavior.
+
 ## Runtime checks
 
 For a release, record which OS, app architecture, client versions, and database versions were used. Check the full path from profile selection through a disposable export/restore, plus saving or downloading the resulting dump.

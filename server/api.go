@@ -45,6 +45,7 @@ type importRequest struct {
 	Connection         apiConnection `json:"connection"`
 	Format             string        `json:"format"`
 	FileName           string        `json:"fileName"`
+	CreateDatabase     bool          `json:"createDatabase"`
 	DropExisting       bool          `json:"dropExisting"`
 	DisableForeignKeys bool          `json:"disableForeignKeys"`
 	Confirm            bool          `json:"confirm"`
@@ -159,6 +160,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := job.ImportFromFile(r.Context(), eng, req.Connection.toEngine(), engine.ImportOptions{
 		Format:             req.Format,
+		CreateDatabase:     req.CreateDatabase,
 		DropExisting:       req.DropExisting,
 		DisableForeignKeys: req.DisableForeignKeys,
 		Confirm:            req.Confirm,
@@ -218,6 +220,7 @@ func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := job.ImportFromFile(r.Context(), eng, conn.toEngine(), engine.ImportOptions{
 		Format:             r.FormValue("format"),
+		CreateDatabase:     formTrue(r.FormValue("createDatabase")),
 		DropExisting:       formTrue(r.FormValue("dropExisting")),
 		DisableForeignKeys: formTrue(r.FormValue("disableForeignKeys")),
 		Confirm:            formTrue(r.FormValue("confirm")),

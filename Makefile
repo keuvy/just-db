@@ -1,4 +1,4 @@
-.PHONY: serve tools test frontend desktop desktop-dev dmg package-linux docker
+.PHONY: serve tools test frontend desktop desktop-dev dmg package-linux package-linux-docker docker
 
 export PATH := $(HOME)/.local/go/bin:$(HOME)/go/bin:$(PATH)
 GO ?= go
@@ -7,6 +7,7 @@ WAILS ?= wails
 WAILS_PLATFORM ?=
 NFPM ?= nfpm
 CREATE_DMG ?= create-dmg
+DOCKER ?= docker
 VERSION ?= $(shell node -p "require('./desktop/wails.json').info.productVersion")
 
 # Fedora 40+ / Debian with WebKitGTK 4.1 need this Wails build tag.
@@ -48,6 +49,9 @@ package-linux: desktop
 	mkdir -p dist
 	$(NFPM) pkg --packager deb --config desktop/packaging/nfpm.yaml --target dist/
 	$(NFPM) pkg --packager rpm --config desktop/packaging/nfpm.yaml --target dist/
+
+package-linux-docker:
+	$(DOCKER) build --platform linux/amd64 --file desktop/packaging/linux/Dockerfile --output type=local,dest=dist/linux-amd64 .
 
 docker:
 	@set -a; if [ -f .env ]; then . ./.env; fi; set +a; \

@@ -1,4 +1,4 @@
-.PHONY: serve tools test frontend desktop desktop-dev dmg package-linux package-linux-docker docker
+.PHONY: serve tools test frontend desktop desktop-dev dmg package-linux package-linux-docker package-windows-docker docker
 
 export PATH := $(HOME)/.local/go/bin:$(HOME)/go/bin:$(PATH)
 GO ?= go
@@ -52,6 +52,9 @@ package-linux: desktop
 
 package-linux-docker:
 	$(DOCKER) build --platform linux/amd64 --file desktop/packaging/linux/Dockerfile --output type=local,dest=dist/linux-amd64 .
+
+package-windows-docker:
+	$(DOCKER) build --platform linux/amd64 --file desktop/packaging/windows/Dockerfile --output type=local,dest=dist/windows-amd64 .
 
 docker:
 	@set -a; if [ -f .env ]; then . ./.env; fi; set +a; \

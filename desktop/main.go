@@ -22,9 +22,10 @@ func main() {
 
 	app := NewApp()
 	err = wails.Run(&options.App{
-		Title:  appmeta.Name,
-		Width:  960,
-		Height: 720,
+		Title:            appmeta.Name,
+		Width:            960,
+		Height:           720,
+		WindowStartState: options.Maximised,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

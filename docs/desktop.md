@@ -71,7 +71,7 @@ make dmg
 
 `make dmg` checks macOS and packager availability before compiling. It then requests `darwin/universal` and stages only `just-db.app`, excluding unrelated build outputs. The DMG contains an Applications shortcut, a background, and drag-to-install instructions. Packaging uses Finder to arrange the window and needs a logged-in macOS desktop session; approve the terminal's Finder automation request if prompted by macOS.
 
-Version 0.4.0 produces `dist/just-db-0.4.0.dmg`. The default version is read from `info.productVersion` in `desktop/wails.json`. The packager replaces an existing file for that version only after the new image succeeds; a failed packaging run retains the previous DMG.
+Version 0.4.1 produces `dist/just-db-0.4.1.dmg`. The default version is read from `info.productVersion` in `desktop/wails.json`. The packager replaces an existing file for that version only after the new image succeeds; a failed packaging run retains the previous DMG.
 
 Useful variations:
 
@@ -80,7 +80,7 @@ Useful variations:
 make dmg CREATE_DMG=/path/to/create-dmg
 
 # Repackage an existing app without compiling it.
-bash desktop/packaging/macos/create-dmg.sh 0.4.0
+bash desktop/packaging/macos/create-dmg.sh 0.4.1
 
 # Inspect the architectures actually present in the built app.
 lipo -archs desktop/build/bin/just-db.app/Contents/MacOS/just-db-desktop
@@ -139,7 +139,7 @@ Install [nfpm](https://nfpm.goreleaser.com/), then run from the repository root:
 make package-linux
 ```
 
-This builds the desktop app and creates both `.deb` and `.rpm` files in `dist/`. There is no `make rpm` target. The current [`nfpm.yaml`](../desktop/packaging/nfpm.yaml) declares version 0.4.0 and `amd64`; changing the Wails target alone does not update that package metadata.
+This builds the desktop app and creates both `.deb` and `.rpm` files in `dist/`. There is no `make rpm` target. The current [`nfpm.yaml`](../desktop/packaging/nfpm.yaml) declares version 0.4.1 and `amd64`; changing the Wails target alone does not update that package metadata.
 
 ```bash
 sudo apt install ./dist/just-db-desktop_*.deb
@@ -147,6 +147,42 @@ sudo dnf install ./dist/just-db-desktop-*.rpm
 ```
 
 On Arch, install the built binary, [`just-db-desktop.desktop`](../desktop/packaging/just-db-desktop.desktop), and [SVG icon](../desktop/packaging/just-db.svg), or package them in a PKGBUILD. Database clients are recommendations in the Debian/RPM configuration; install the clients for the engines you use.
+
+## Windows packages
+
+With Docker running, build the Windows x86-64 executable and installer from
+macOS or Linux:
+
+```bash
+make package-windows-docker
+```
+
+Like the Linux Docker target, this installs the build tools in a container,
+runs frontend tests and Go tests excluding database roundtrips, and exports
+only the artifacts. No host Go, Node.js, Wails, or NSIS installation is needed.
+The Go tests run on Linux; Wails then cross-compiles the app for Windows.
+
+Outputs are in `dist/windows-amd64/`:
+
+- `just-db-desktop.exe`, the standalone application
+- `just-db-0.4.1-windows-amd64-setup.exe`, the NSIS installer
+- `SHA256SUMS` and `binary-info.txt`
+
+The installer filename uses `info.productVersion` from `desktop/wails.json`.
+The build verifies the app's Windows x86-64 GUI format and extracts the
+installer to check that its embedded app matches the standalone executable.
+The container does not modify the host's frontend dependencies or macOS app.
+
+Windows needs the Microsoft WebView2 Runtime. The app and installer include
+Microsoft's bootstrapper, which can install the runtime if missing; that
+installation requires internet access. See the [Wails Windows guide](https://wails.io/docs/guides/windows/)
+and [NSIS packaging guide](https://wails.io/docs/guides/windows-installer/).
+PostgreSQL and MySQL client tools are not bundled. Install the clients you use
+and add their `bin` directories to Windows `PATH` before opening the app.
+
+The artifacts are unsigned. Compilation and payload checks do not verify
+Windows installation, launch, window sizing, native dialogs, or database
+operations; those need testing on Windows before release.
 
 ## Data and client tools
 

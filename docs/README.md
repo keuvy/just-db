@@ -18,12 +18,12 @@ Reference for just-db 0.2.0, checked against the source on 2026-09-08. Commands 
 
 ## Release metadata
 
-These files currently identify version 0.4.0:
+These files currently identify version 0.4.1:
 
 | File | Used by |
 | --- | --- |
 | [`internal/appmeta/appmeta.go`](../internal/appmeta/appmeta.go) | CLI output and web/desktop health information |
-| [`desktop/wails.json`](../desktop/wails.json) | macOS app metadata and the default DMG filename |
+| [`desktop/wails.json`](../desktop/wails.json) | Desktop app metadata, default DMG filename, and Windows installer version |
 | [`frontend/package.json`](../frontend/package.json), [`frontend/package-lock.json`](../frontend/package-lock.json) | Frontend package metadata |
 | [`frontend/src/preview.ts`](../frontend/src/preview.ts) | Development preview health information |
 | [`desktop/packaging/nfpm.yaml`](../desktop/packaging/nfpm.yaml) | Linux package metadata |

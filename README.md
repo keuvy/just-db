@@ -7,7 +7,12 @@ Two binaries share one Go engine:
 - `just-db serve` — web UI for EasyPanel / Docker
 - Wails desktop app — native window on Debian, Fedora, Arch, and macOS
 
-SQLite is not implemented in version 0.4.0.
+SQLite is not implemented in version 0.4.1.
+
+## Version 0.4.1
+
+- The desktop app starts maximized.
+- Windows x86-64 builds now include a standalone executable and installer, built with `make package-windows-docker`.
 
 Guides and current limitations: [documentation index](docs/README.md).
 
@@ -54,7 +59,7 @@ wails doctor
 make desktop
 ```
 
-The GUI executable is **`just-db-desktop`**; the macOS bundle is `desktop/build/bin/just-db.app`. For a universal Intel/Apple Silicon installer, install `create-dmg` and run `make dmg`. Version 0.4.0 produces `dist/just-db-0.4.0.dmg`. Details: [desktop builds and packaging](docs/desktop.md).
+The GUI executable is **`just-db-desktop`**; the macOS bundle is `desktop/build/bin/just-db.app`. For a universal Intel/Apple Silicon installer, install `create-dmg` and run `make dmg`. Version 0.4.1 produces `dist/just-db-0.4.1.dmg`. Details: [desktop builds and packaging](docs/desktop.md).
 
 To build the Linux x86-64 desktop executable and `.deb`/`.rpm` installers from
 macOS with Docker running:
@@ -65,6 +70,15 @@ make package-linux-docker
 
 Artifacts are exported to `dist/linux-amd64/`. See [Linux build requirements and
 verification limits](docs/desktop.md#build-on-macos-with-docker).
+
+To build the Windows x86-64 desktop `.exe` and installer with Docker running:
+
+```bash
+make package-windows-docker
+```
+
+Artifacts are exported to `dist/windows-amd64/`. See [Windows packaging and
+runtime requirements](docs/desktop.md#windows-packages).
 
 ## EasyPanel
 

@@ -68,3 +68,71 @@ func TestImportArgsDisableForeignKeys(t *testing.T) {
 		t.Fatalf("expected foreign key override: %q", args)
 	}
 }
+
+func TestFlavorOf(t *testing.T) {
+	cases := []struct {
+		name, path, version string
+		maria               bool
+		release             [3]int
+	}{
+		{"mysqldump", "/usr/local/mysql/bin/mysqldump", "mysqldump  Ver 8.4.6 for macos15 on x86_64 (MySQL Community Server - GPL)", false, [3]int{8, 4, 6}},
+		{"mysqldump", "/usr/local/bin/mysqldump", "mysqldump  Ver 10.13 Distrib 5.7.44, for osx10.19 (x86_64)", false, [3]int{5, 7, 44}},
+		{"mysqldump", "/usr/bin/mysqldump", "mysqldump  Ver 8.0.36-28 for Linux on x86_64 (Percona Server (GPL), Release 28, Revision 47601f19)", false, [3]int{8, 0, 36}},
+		{"mysqldump", "/usr/bin/mysqldump", "mysqldump  Ver 10.19 Distrib 10.11.6-MariaDB, for debian-linux-gnu (x86_64)", true, [3]int{}},
+		{"mariadb-dump", "/opt/homebrew/bin/mariadb-dump", "mariadb-dump from 11.4.2-MariaDB, client 10.19 for osx10.19 (arm64)", true, [3]int{}},
+		{"mysqldump", "/usr/bin/mysqldump", "", false, [3]int{}},
+	}
+	for _, c := range cases {
+		got := flavorOf(engine.Tool{Name: c.name, Path: c.path, Version: c.version})
+		if got.maria != c.maria || got.release != c.release {
+			t.Errorf("%q: got %+v", c.version, got)
+		}
+	}
+}
+
+func TestDumpArgsMatchClientRelease(t *testing.T) {
+	cfg := engine.Connection{Host: "db", Port: 3306, User: "app", Database: "appdb", SSLMode: "disable"}.Normalized(3306)
+	cases := []struct {
+		version string
+		include []string
+		exclude []string
+	}{
+		{
+			version: "mysqldump  Ver 8.4.6 for macos15 on x86_64 (MySQL Community Server - GPL)",
+			include: []string{"--set-gtid-purged=OFF", "--column-statistics=0", "--no-tablespaces", "--get-server-public-key", "--ssl-mode=DISABLED"},
+		},
+		{
+			version: "mysqldump  Ver 10.13 Distrib 5.7.44, for Linux (x86_64)",
+			include: []string{"--set-gtid-purged=OFF", "--no-tablespaces", "--get-server-public-key", "--ssl-mode=DISABLED"},
+			exclude: []string{"--column-statistics=0"},
+		},
+		{
+			version: "mysqldump  Ver 10.13 Distrib 5.7.10, for Linux (x86_64)",
+			include: []string{"--set-gtid-purged=OFF", "--no-tablespaces", "--skip-ssl"},
+			exclude: []string{"--column-statistics=0", "--get-server-public-key", "--ssl-mode=DISABLED"},
+		},
+		{
+			version: "mysqldump  Ver 10.19 Distrib 10.11.6-MariaDB, for debian-linux-gnu (x86_64)",
+			include: []string{"--skip-ssl"},
+			exclude: []string{"--set-gtid-purged=OFF", "--column-statistics=0", "--get-server-public-key", "--ssl-mode=DISABLED"},
+		},
+	}
+	for _, c := range cases {
+		tool := engine.Tool{Name: "mysqldump", Path: "/usr/local/bin/mysqldump", Version: c.version}
+		args := dumpArgs("/tmp/justdb-my.cnf", cfg, tool, nil)
+		has := map[string]bool{}
+		for _, arg := range args {
+			has[arg] = true
+		}
+		for _, want := range c.include {
+			if !has[want] {
+				t.Errorf("%q: missing %s in %q", c.version, want, args)
+			}
+		}
+		for _, bad := range c.exclude {
+			if has[bad] {
+				t.Errorf("%q: unexpected %s in %q", c.version, bad, args)
+			}
+		}
+	}
+}

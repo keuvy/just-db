@@ -77,6 +77,16 @@ For SQL errors such as an unknown `SET` option, a newer client may have produced
 
 A successful connection test only proves the test query succeeded. Export permissions, supported formats, and restore compatibility are separate. A failed restore may already have applied database changes. Review the exact target and error before retrying; enabling drop-existing is not a version-compatibility fix.
 
+## MySQL export fails with `unknown variable`
+
+Example:
+
+```text
+mysqldump: [ERROR] unknown variable 'column-statistics=0'
+```
+
+Older just-db builds chose flags from the executable name only, so a MySQL 5.7 or MariaDB client installed as `mysqldump` received MySQL 8-only flags. Current builds read the client's `--version` output and skip flags that release lacks. Update the app, then check the detected dump tool's path and version in Tools & settings. An empty version is treated as current MySQL.
+
 ## Dump created, but download or save failed
 
 Export first creates the dump in the library. A cancelled desktop save dialog leaves the original there. A copy/download error is reported separately from an export error; retry saving from the result or Dumps instead of exporting again.

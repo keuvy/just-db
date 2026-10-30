@@ -56,7 +56,7 @@ PostgreSQL custom restore uses a seekable file. The Go import contract requires 
 
 These operations do not issue `DROP DATABASE`. SQL files can contain destructive statements independently of the drop-existing option; PostgreSQL SQL exports currently include `--clean --if-exists`. A failed restore can leave partial changes.
 
-PostgreSQL passwords are passed through `PGPASSWORD`. MySQL uses a temporary mode-0600 defaults file with `--defaults-file` first in the command arguments. MySQL/MariaDB-specific SSL and public-key flags are selected in the engine. See the [engine source](../internal/mysql/mysql.go).
+PostgreSQL passwords are passed through `PGPASSWORD`. MySQL uses a temporary mode-0600 defaults file with `--defaults-file` first in the command arguments. MySQL/MariaDB-specific SSL, public-key, and dump flags are selected from the detected client's `--version` output, so a MariaDB or MySQL 5.7 binary named `mysqldump` gets only flags it accepts. See the [engine source](../internal/mysql/mysql.go).
 
 ## CLI
 

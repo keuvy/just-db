@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"just-db/internal/engine"
@@ -218,7 +219,7 @@ func clientArgs(defaults string, cfg engine.Connection, tool engine.Tool) []stri
 		"--connect-timeout=10",
 	}
 	args = append(args, sslArgs(tool, cfg.SSLMode)...)
-	if !isMaria(tool) {
+	if flavorOf(tool).publicKeyFlag() {
 		args = append(args, "--get-server-public-key")
 	}
 	if cfg.Database != "" {
@@ -246,8 +247,19 @@ func dumpArgs(defaults string, cfg engine.Connection, tool engine.Tool, tables [
 		"--hex-blob",
 	}
 	args = append(args, sslArgs(tool, cfg.SSLMode)...)
-	if !isMaria(tool) {
-		args = append(args, "--set-gtid-purged=OFF", "--column-statistics=0", "--no-tablespaces", "--get-server-public-key")
+	if f := flavorOf(tool); !f.maria {
+		if f.atLeast(5, 6, 9) {
+			args = append(args, "--set-gtid-purged=OFF")
+		}
+		// MySQL 8 mysqldump queries column histograms, which older servers lack.
+		// Older clients don't know the flag and exit on it.
+		if f.atLeast(8, 0, 2) {
+			args = append(args, "--column-statistics=0")
+		}
+		args = append(args, "--no-tablespaces")
+		if f.publicKeyFlag() {
+			args = append(args, "--get-server-public-key")
+		}
 	}
 	args = append(args, cfg.Database)
 	for _, table := range tables {
@@ -261,7 +273,8 @@ func dumpArgs(defaults string, cfg engine.Connection, tool engine.Tool, tables [
 
 func sslArgs(tool engine.Tool, mode string) []string {
 	mode = strings.ToLower(strings.TrimSpace(mode))
-	if isMaria(tool) {
+	// --ssl-mode arrived in MySQL 5.7.11; MariaDB never adopted it.
+	if f := flavorOf(tool); f.maria || !f.atLeast(5, 7, 11) {
 		switch mode {
 		case "disable":
 			return []string{"--skip-ssl"}
@@ -281,9 +294,67 @@ func sslArgs(tool engine.Tool, mode string) []string {
 	}
 }
 
-func isMaria(tool engine.Tool) bool {
-	blob := strings.ToLower(tool.Name + " " + tool.Path)
-	return strings.Contains(blob, "maria")
+// flavor is the client family and release behind a tool. The name alone is
+// not enough: MariaDB and MySQL 5.7 both ship binaries called mysqldump.
+type flavor struct {
+	maria   bool
+	release [3]int // MySQL release; all zero when unknown
+}
+
+func flavorOf(tool engine.Tool) flavor {
+	blob := strings.ToLower(tool.Name + " " + tool.Path + " " + tool.Version)
+	f := flavor{maria: strings.Contains(blob, "maria")}
+	if f.maria {
+		return f
+	}
+	// MySQL 5.x: "mysqldump  Ver 10.13 Distrib 5.7.44, for Linux (x86_64)"
+	// MySQL 8+:  "mysqldump  Ver 8.4.6 for macos15 on x86_64 (MySQL Community Server - GPL)"
+	version := tool.Version
+	if _, after, ok := strings.Cut(version, "Distrib "); ok {
+		version = after
+	} else if _, after, ok := strings.Cut(version, "Ver "); ok {
+		version = after
+	} else {
+		return f
+	}
+	fields := strings.FieldsFunc(version, func(r rune) bool { return r == '.' || r == ',' || r == '-' || r == ' ' })
+	for i := 0; i < len(fields) && i < len(f.release); i++ {
+		n, err := strconv.Atoi(fields[i])
+		if err != nil {
+			break
+		}
+		f.release[i] = n
+	}
+	return f
+}
+
+func (f flavor) known() bool { return f.release != [3]int{} }
+
+// atLeast reports whether the MySQL client is this release or newer. An
+// unknown release is treated as current MySQL.
+func (f flavor) atLeast(major, minor, patch int) bool {
+	if f.maria {
+		return false
+	}
+	if !f.known() {
+		return true
+	}
+	want := [3]int{major, minor, patch}
+	for i := range want {
+		if f.release[i] != want[i] {
+			return f.release[i] > want[i]
+		}
+	}
+	return true
+}
+
+// publicKeyFlag reports support for --get-server-public-key, added in MySQL
+// 8.0.4 and backported to 5.7.23.
+func (f flavor) publicKeyFlag() bool {
+	if f.atLeast(8, 0, 4) {
+		return true
+	}
+	return f.atLeast(5, 7, 23) && f.release[0] == 5
 }
 
 func mysqlFormat(format string) (string, error) {

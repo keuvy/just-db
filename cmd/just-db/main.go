@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"just-db/internal/appmeta"
 	"just-db/internal/engine"
@@ -147,11 +148,17 @@ func cmdExport(args []string) error {
 	c := registerConnFlags(fs)
 	format := fs.String("format", "", "sql or custom")
 	outPath := fs.String("out", "", "output dump path")
+	tables := fs.String("tables", "", "comma-separated tables to export (default all)")
+	content := fs.String("content", engine.ContentAll, "all, schema (structure only), or data (rows only)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *outPath == "" {
 		return fmt.Errorf("-out is required")
+	}
+	opts := engine.ExportOptions{Format: *format, Content: *content, Tables: strings.Split(*tables, ",")}
+	if _, err := opts.Selection(); err != nil {
+		return err
 	}
 	engName, cfg, err := resolveConn(fs, c, *data, *profileName)
 	if err != nil {
@@ -161,7 +168,7 @@ func cmdExport(args []string) error {
 	if err != nil {
 		return err
 	}
-	result, err := job.ExportToFile(context.Background(), eng, cfg, engine.ExportOptions{Format: *format}, *outPath)
+	result, err := job.ExportToFile(context.Background(), eng, cfg, opts, *outPath)
 	if err != nil {
 		return err
 	}

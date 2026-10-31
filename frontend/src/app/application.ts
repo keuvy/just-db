@@ -1,5 +1,5 @@
 import type { Client } from "./client";
-import { Workspace, dumpFileError, fileFormat, message, requiredTool, type Notice, type View } from "./state";
+import { Workspace, dumpFileError, exportOptions, fileFormat, filteredTables, message, requiredTool, type Notice, type Parts, type View } from "./state";
 import { Operations } from "./operations";
 import { destination } from "./navigation";
 import { Appearance, type Theme } from "./theme";
@@ -8,7 +8,7 @@ import { confirmDialog } from "../components/feedback";
 import { activityList, activitySummary, headerActions, heading, profilesView, shell } from "../components/shell";
 import { duration, notice, replaceRegion } from "../components/html";
 import { workspaceView } from "../views/workspace";
-import { exportView } from "../views/export";
+import { exportFooter, exportView, tableRows, tableSummary } from "../views/export";
 import { dumpsView, dumpRows, type DumpSort } from "../views/dumps";
 import { settingsView } from "../views/settings";
 
@@ -100,8 +100,24 @@ export class Application {
   }
 
   private renderPage(): void {
+    // The table list scrolls on its own; keep its position across full renders.
+    const tableScroll = this.root.querySelector("#table-rows")?.scrollTop ?? 0;
     replaceRegion(this.mount("page-notice"), notice(this.notices.get(this.state.view)));
     replaceRegion(this.mount("page-content"), this.state.view === "dumps" ? dumpsView(this.state, this.operations, this.dumpSearch, this.dumpSort, this.fileBusy) : this.state.view === "settings" ? settingsView(this.state, this.appearance.value) : workspaceView(this.state, this.operations));
+    const rows = this.root.querySelector("#table-rows");
+    if (rows) rows.scrollTop = tableScroll;
+  }
+
+  // Update table counts and the export button without rebuilding the table list.
+  private renderTableChoice(rows = false): void {
+    const session = this.state.session;
+    if (!session) return;
+    const list = this.root.querySelector<HTMLElement>("#table-rows");
+    const summary = this.root.querySelector<HTMLElement>("#table-summary");
+    const footer = this.root.querySelector<HTMLElement>("#export-footer");
+    if (rows && list) replaceRegion(list, tableRows(session));
+    if (summary) replaceRegion(summary, tableSummary(session));
+    if (footer) replaceRegion(footer, exportFooter(this.state, this.operations));
   }
 
   private setNotice(view: View, value: Notice): void {
@@ -170,6 +186,7 @@ export class Application {
       case "test-profile": void this.state.testProfile(); break;
       case "delete-profile": void this.deleteProfile(); break;
       case "export": void this.export(); break;
+      case "load-tables": void this.state.loadTables(); break;
       case "restore": void this.restore(); break;
       case "operation-mode": this.state.mode = mode as "export" | "restore"; this.renderPage(); this.root.querySelector<HTMLElement>(`#tab-${mode}`)?.focus(); break;
       case "source-mode": this.state.sourceMode = mode as "file" | "library"; this.state.setSource(null); this.renderPage(); if (mode === "library") void this.state.loadDumps(); break;
@@ -199,6 +216,7 @@ export class Application {
       const next = this.root.querySelector<HTMLButtonElement>("#restore-next-target");
       if (next) next.disabled = !input.value.trim() || !this.state.profile;
     }
+    if (input.id === "table-filter" && this.state.session) { this.state.session.tableFilter = input.value; this.renderTableChoice(true); }
     if (input.id === "restore-confirm-name") { this.state.confirmation = input.value; this.updateRestoreButton(); }
     if (input.id === "restore-new-database") {
       this.state.setNewDatabase(input.value);
@@ -210,6 +228,12 @@ export class Application {
   private changed = (event: Event): void => {
     const input = event.target as HTMLInputElement;
     if (input.name === "export-format" && this.state.session) { this.state.session.format = input.value; this.renderPage(); }
+    if ((input.id === "export-schema" || input.id === "export-data") && this.state.session) { this.state.session[input.id === "export-schema" ? "schema" : "data"] = input.checked; this.renderPage(); }
+    if (input.name === "export-table-mode") { this.state.setTableMode(input.value as "all" | "selected"); this.renderPage(); }
+    if (input.dataset.table !== undefined && input.dataset.part) { this.state.setTablePart([input.dataset.table], input.dataset.part as keyof Parts, input.checked); this.renderTableChoice(); }
+    if (input.dataset.column && this.state.session) { this.state.setTablePart(filteredTables(this.state.session).map(table => table.name), input.dataset.column as keyof Parts, input.checked); this.renderTableChoice(true); }
+    // Typing changes the database on every key; load tables only once a name is committed.
+    if (input.id === "workspace-database" && this.state.mode === "export" && this.state.session?.tableMode === "selected") void this.state.loadTables();
     if (input.id === "restore-profile") { if (input.value) void this.state.selectProfile(input.value); else { this.state.clearProfile(); this.render(); } }
     if (input.id === "restore-file" && input.files?.[0]) this.acceptFile(input.files[0]);
     if (input.id === "restore-library") {
@@ -302,7 +326,7 @@ export class Application {
     if (!profile || !session || this.operations.active) return;
     const missing = requiredTool(this.state.engines.data, profile.engine, "export");
     if (missing) { this.setNotice("workspace", { kind: "error", text: missing }); return; }
-    try { await this.operations.export(profile, session.database, session.format); await this.state.loadDumps(); }
+    try { await this.operations.export(profile, session.database, exportOptions(session)); await this.state.loadDumps(); }
     catch (error) { this.setNotice("workspace", { kind: "error", text: message(error, profile.connection.password) }); }
   }
 

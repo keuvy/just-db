@@ -21,7 +21,7 @@ export function createPreviewClient(options: { empty?: boolean; many?: boolean; 
   });
   return {
     runtimeMode: () => options.desktop ? "desktop" : "web",
-    getHealth: async () => ({ status: "ok", name: "just-db", version: "0.4.1", mode: options.desktop ? "desktop" : "web", dataDir: "/data", backupsDir: "/data/backups" }),
+    getHealth: async () => ({ status: "ok", name: "just-db", version: "0.4.2", mode: options.desktop ? "desktop" : "web", dataDir: "/data", backupsDir: "/data/backups" }),
     getDefaults: async () => null,
     getEngines: async () => { await wait(); return structuredClone(engines); },
     listProfiles: async () => { await wait(); return profiles.map(profile => ({ name: profile.name, engine: profile.engine, host: profile.connection.host, port: profile.connection.port, user: profile.connection.user, database: profile.connection.database, sslMode: profile.connection.sslMode })); },
@@ -33,7 +33,8 @@ export function createPreviewClient(options: { empty?: boolean; many?: boolean; 
     listDumps: async () => { await wait(); return structuredClone(dumps); },
     deleteDump: async name => { await wait(); dumps = dumps.filter(dump => dump.name !== name); },
     downloadDump: async () => { await wait(); if (failure) throw new Error("Sample download failed."); return true; },
-    exportDump: async (engine, connection, format) => { await wait(); await wait(); const name = `${engine}-${connection.database}-${Date.now()}.${format === "sql" ? "sql" : "dump"}`; const dump = { name, path: `/data/backups/${name}`, size: 25794969, modTime: new Date().toISOString() }; dumps.unshift(dump); return { path: dump.path, bytes: dump.size, format }; },
+    listTables: async engine => { await wait(); if (failure) throw new Error("Table listing is unavailable."); const names = ["customers", "order_items", "orders", "products", "audit_log", "sessions", ...(many ? Array.from({ length: 300 }, (_, index) => `archive_${String(index).padStart(3, "0")}`) : [])].sort(); return [...names.map(name => ({ name: engine === "mysql" ? name : `public.${name}` })), { name: engine === "mysql" ? "active_customers" : "public.active_customers", view: true }]; },
+    exportDump: async (engine, connection, options) => { await wait(); await wait(); const suffix = options.content === "schema" ? "-structure" : options.content === "data" ? "-data" : ""; const name = `${engine}-${connection.database}-${Date.now()}${suffix}.${options.format === "sql" ? "sql" : "dump"}`; const dump = { name, path: `/data/backups/${name}`, size: 25794969, modTime: new Date().toISOString() }; dumps.unshift(dump); return { path: dump.path, bytes: dump.size, format: options.format }; },
     importDump: async () => { await wait(); await wait(); if (failure) throw new Error("Sample restore failed."); },
     pickOpenPath: async () => "/sample/example.dump",
     openBackupsDir: async () => {},

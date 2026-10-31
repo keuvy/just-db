@@ -141,8 +141,69 @@ describe("rendered workflows", () => {
     await vi.waitFor(() => expect(app.operations.active).toBeNull());
     click('[data-action="select-profile"][data-name="local-postgres"]');
     await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>("#workspace-database")?.value).toBe("selected_db"));
-    expect(exporting).toHaveBeenCalledWith("postgres", expect.objectContaining({ database: "selected_db" }), "custom", "");
+    expect(exporting).toHaveBeenCalledWith("postgres", expect.objectContaining({ database: "selected_db" }), { format: "custom", content: "all", tables: [] }, "");
     expect(document.querySelector(".latest-result")?.textContent).toContain("Dump created");
+  });
+
+  it("exports structure and data chosen per table", async () => {
+    const { app, client } = await start();
+    const exporting = vi.spyOn(client, "exportDump");
+    expect(document.querySelector("#export-schema")).not.toBeNull();
+    change("#export-tables-selected", true);
+    expect(document.querySelector("#export-schema")).toBeNull();
+    await vi.waitFor(() => expect(document.querySelectorAll("#table-rows .table-row")).toHaveLength(7));
+    expect(document.querySelector("#table-summary")?.textContent).toContain("7 of 7 tables");
+    expect(document.querySelector('[data-table="public.active_customers"][data-part="data"]')).toBeNull();
+    change("#export-format-sql", true);
+    type("#table-filter", "order");
+    expect(Array.from(document.querySelectorAll<HTMLInputElement>('#table-rows [data-part="schema"]'), input => input.dataset.table)).toEqual(["public.order_items", "public.orders"]);
+    change("#table-column-schema", false);
+    expect(document.querySelectorAll('#table-rows [data-part="schema"]:checked')).toHaveLength(0);
+    type("#table-filter", "");
+    const column = document.querySelector<HTMLInputElement>("#table-column-schema")!;
+    expect(column.indeterminate).toBe(true);
+    change('[data-table="public.sessions"][data-part="data"]', false);
+    change('[data-table="public.sessions"][data-part="schema"]', false);
+    expect(document.querySelector("#table-summary")?.textContent).toContain("6 of 7 tables");
+    change('[data-table="public.audit_log"][data-part="data"]', false);
+    click("#export-dump");
+    await vi.waitFor(() => expect(app.operations.active).toBeNull());
+    const options = exporting.mock.calls[0][2];
+    expect(options).toMatchObject({ format: "sql", content: "all", tables: [] });
+    expect(Object.fromEntries(options.perTable!.map(table => [table.name, [table.schema, table.data]]))).toEqual({
+      "public.active_customers": [true, false],
+      "public.audit_log": [true, false],
+      "public.customers": [true, true],
+      "public.order_items": [false, true],
+      "public.orders": [false, true],
+      "public.products": [true, true],
+    });
+    expect(document.querySelector(".latest-result")?.textContent).toContain("6 tables · structure for 4, data for 4");
+  });
+
+  it("blocks a custom archive that mixes data-only tables with structure", async () => {
+    await start();
+    change("#export-tables-selected", true);
+    await vi.waitFor(() => expect(document.querySelectorAll("#table-rows .table-row")).toHaveLength(7));
+    change('[data-table="public.orders"][data-part="schema"]', false);
+    expect(document.querySelector<HTMLButtonElement>("#export-dump")!.disabled).toBe(true);
+    expect(document.querySelector("#export-help")?.textContent).toContain("Choose SQL format");
+    change("#export-format-sql", true);
+    expect(document.querySelector<HTMLButtonElement>("#export-dump")!.disabled).toBe(false);
+  });
+
+  it("reloads tables for a database picked from the list", async () => {
+    const { app, client } = await start();
+    const listing = vi.spyOn(client, "listTables");
+    change("#export-tables-selected", true);
+    await vi.waitFor(() => expect(app.state.session?.tablesFor).toBe("app_development"));
+    click("#workspace-database");
+    click('#workspace-database-listbox [data-value="app_test"]');
+    await vi.waitFor(() => expect(app.state.session?.tablesFor).toBe("app_test"));
+    expect(listing).toHaveBeenLastCalledWith("postgres", expect.objectContaining({ database: "app_test" }));
+    type("#workspace-database", "typed_db");
+    expect(listing).toHaveBeenCalledTimes(2);
+    expect(document.querySelector('[data-action="load-tables"]')?.textContent).toContain("Load tables");
   });
 
   it("requires SQL acknowledgment and typed target before one restore submission", async () => {

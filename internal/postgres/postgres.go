@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -83,16 +84,116 @@ func (e *Engine) Export(ctx context.Context, cfg engine.Connection, opts engine.
 	if err != nil {
 		return err
 	}
-	args, err := dumpArgs(cfg, opts.Tables, format)
+	sel, err := opts.Selection()
 	if err != nil {
 		return err
 	}
-	return proc.Run(ctx, proc.RunOptions{
-		Path:   detected.Dump.Path,
-		Args:   args,
+	runs, err := dumpRuns(sel, format)
+	if err != nil {
+		return err
+	}
+	for _, run := range runs {
+		args, err := dumpArgs(cfg, format, run)
+		if err != nil {
+			return err
+		}
+		if err := proc.Run(ctx, proc.RunOptions{
+			Path:   detected.Dump.Path,
+			Args:   args,
+			Env:    clientEnv(cfg),
+			Stdout: out,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// dumpRun is one pg_dump invocation.
+type dumpRun struct {
+	tables []string // --table; empty dumps every table
+	noData []string // --exclude-table-data
+	flags  []string // content flags such as --schema-only or --section=data
+	clean  bool     // plain SQL: drop objects before creating them
+}
+
+// dumpRuns plans the pg_dump runs for a selection. One run covers every
+// choice except rows-only tables mixed with tables that have structure. Plain
+// SQL handles that mix with three runs in pg_dump's own order: tables, rows,
+// then indexes, constraints, and triggers. A custom archive is one file that
+// cannot be appended to, so it rejects the mix.
+func dumpRuns(sel engine.Selection, format string) ([]dumpRun, error) {
+	if sel.All {
+		return []dumpRun{contentRun(nil, sel.Schema, sel.Data)}, nil
+	}
+	both, schemaOnly, dataOnly := sel.Groups()
+	structure := slices.Concat(both, schemaOnly)
+	switch {
+	case len(dataOnly) == 0:
+		run := contentRun(structure, true, len(both) > 0)
+		if len(both) > 0 {
+			run.noData = schemaOnly
+		}
+		return []dumpRun{run}, nil
+	case len(structure) == 0:
+		return []dumpRun{contentRun(dataOnly, false, true)}, nil
+	case format == engine.FormatCustom:
+		return nil, fmt.Errorf("%w: a PostgreSQL custom archive cannot mix data-only tables with tables that include structure; use SQL format", engine.ErrInvalidExport)
+	default:
+		return []dumpRun{
+			{tables: structure, flags: []string{"--section=pre-data"}, clean: true},
+			{tables: slices.Concat(both, dataOnly), flags: []string{"--section=data"}},
+			{tables: structure, flags: []string{"--section=post-data"}},
+		}, nil
+	}
+}
+
+func contentRun(tables []string, schema, data bool) dumpRun {
+	run := dumpRun{tables: tables, clean: schema}
+	if !data {
+		run.flags = []string{"--schema-only"}
+	}
+	if !schema {
+		// pg_dump rejects --clean together with --data-only.
+		run.flags = []string{"--data-only"}
+	}
+	return run
+}
+
+// ListTables returns tables and views outside the system schemas. Names are
+// quoted identifiers, so each one is a literal pg_dump --table pattern.
+func (e *Engine) ListTables(ctx context.Context, cfg engine.Connection) ([]engine.Table, error) {
+	if err := cfg.RequireDatabase(); err != nil {
+		return nil, err
+	}
+	cfg, detected, err := e.prepare(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if !detected.Client.Found {
+		return nil, fmt.Errorf("%w: psql", engine.ErrToolsMissing)
+	}
+	const sql = `SELECT CASE WHEN c.relkind IN ('v', 'm') THEN 'view' ELSE 'table' END || '|' || quote_ident(n.nspname) || '.' || quote_ident(c.relname)
+FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND n.nspname <> 'information_schema' AND left(n.nspname, 3) <> 'pg_'
+ORDER BY n.nspname, c.relname`
+	var out strings.Builder
+	if err := proc.Run(ctx, proc.RunOptions{
+		Path:   detected.Client.Path,
+		Args:   append(clientArgs(cfg), "--no-psqlrc", "--tuples-only", "--no-align", "--command", sql),
 		Env:    clientEnv(cfg),
-		Stdout: out,
-	})
+		Stdout: &out,
+	}); err != nil {
+		return nil, err
+	}
+	tables := make([]engine.Table, 0)
+	for _, line := range engine.LineNames(out.String()) {
+		kind, name, ok := strings.Cut(line, "|")
+		if ok && name != "" {
+			tables = append(tables, engine.Table{Name: name, View: kind == "view"})
+		}
+	}
+	return tables, nil
 }
 
 func (e *Engine) Import(ctx context.Context, cfg engine.Connection, opts engine.ImportOptions, in io.Reader) error {
@@ -226,22 +327,27 @@ func clientArgs(cfg engine.Connection) []string {
 	}
 }
 
-func dumpArgs(cfg engine.Connection, tables []string, format string) ([]string, error) {
+func dumpArgs(cfg engine.Connection, format string, run dumpRun) ([]string, error) {
 	args := append(clientArgs(cfg), "--no-owner", "--verbose")
 	switch format {
 	case engine.FormatCustom:
 		args = append(args, "--format=custom")
 	case engine.FormatSQL:
-		args = append(args, "--format=plain", "--clean", "--if-exists")
+		args = append(args, "--format=plain")
+		if run.clean {
+			args = append(args, "--clean", "--if-exists")
+		}
 	default:
 		return nil, fmt.Errorf("%w: %s", engine.ErrUnsupportedFormat, format)
 	}
-	for _, table := range tables {
-		table = strings.TrimSpace(table)
-		if table == "" {
-			continue
+	args = append(args, run.flags...)
+	for _, table := range run.tables {
+		if table = strings.TrimSpace(table); table != "" {
+			args = append(args, "--table", table)
 		}
-		args = append(args, "--table", table)
+	}
+	for _, table := range run.noData {
+		args = append(args, "--exclude-table-data", table)
 	}
 	return args, nil
 }

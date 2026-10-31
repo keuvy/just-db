@@ -71,7 +71,7 @@ make dmg
 
 `make dmg` checks macOS and packager availability before compiling. It then requests `darwin/universal` and stages only `just-db.app`, excluding unrelated build outputs. The DMG contains an Applications shortcut, a background, and drag-to-install instructions. Packaging uses Finder to arrange the window and needs a logged-in macOS desktop session; approve the terminal's Finder automation request if prompted by macOS.
 
-Version 0.4.1 produces `dist/just-db-0.4.1.dmg`. The default version is read from `info.productVersion` in `desktop/wails.json`. The packager replaces an existing file for that version only after the new image succeeds; a failed packaging run retains the previous DMG.
+Version 0.4.2 produces `dist/just-db-0.4.2.dmg`. The default version is read from `info.productVersion` in `desktop/wails.json`. The packager replaces an existing file for that version only after the new image succeeds; a failed packaging run retains the previous DMG.
 
 Useful variations:
 
@@ -80,7 +80,7 @@ Useful variations:
 make dmg CREATE_DMG=/path/to/create-dmg
 
 # Repackage an existing app without compiling it.
-bash desktop/packaging/macos/create-dmg.sh 0.4.1
+bash desktop/packaging/macos/create-dmg.sh 0.4.2
 
 # Inspect the architectures actually present in the built app.
 lipo -archs desktop/build/bin/just-db.app/Contents/MacOS/just-db-desktop
@@ -139,7 +139,7 @@ Install [nfpm](https://nfpm.goreleaser.com/), then run from the repository root:
 make package-linux
 ```
 
-This builds the desktop app and creates both `.deb` and `.rpm` files in `dist/`. There is no `make rpm` target. The current [`nfpm.yaml`](../desktop/packaging/nfpm.yaml) declares version 0.4.1 and `amd64`; changing the Wails target alone does not update that package metadata.
+This builds the desktop app and creates both `.deb` and `.rpm` files in `dist/`. There is no `make rpm` target. The current [`nfpm.yaml`](../desktop/packaging/nfpm.yaml) declares version 0.4.2 and `amd64`; changing the Wails target alone does not update that package metadata.
 
 ```bash
 sudo apt install ./dist/just-db-desktop_*.deb
@@ -165,7 +165,7 @@ The Go tests run on Linux; Wails then cross-compiles the app for Windows.
 Outputs are in `dist/windows-amd64/`:
 
 - `just-db-desktop.exe`, the standalone application
-- `just-db-0.4.1-windows-amd64-setup.exe`, the NSIS installer
+- `just-db-0.4.2-windows-amd64-setup.exe`, the NSIS installer
 - `SHA256SUMS` and `binary-info.txt`
 
 The installer filename uses `info.productVersion` from `desktop/wails.json`.

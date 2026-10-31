@@ -1,16 +1,70 @@
-import type { Connection, Defaults, DumpFile, EngineInfo, Health, Profile, ProfileSummary } from "../api";
+import type { Connection, Defaults, DumpFile, EngineInfo, ExportContent, ExportOptions, Health, Profile, ProfileSummary, Table, TableContent } from "../api";
 import type { Client } from "./client";
 
 export type View = "workspace" | "dumps" | "settings";
 export type Notice = { text: string; kind: "info" | "success" | "error" | "warning" };
 export type Resource<T> = { data: T; loading: boolean; error: string };
+export type Parts = { schema: boolean; data: boolean };
 export type Session = {
   database: string;
   format: string;
   databases: Resource<string[]>;
   testing: boolean;
   test?: Notice;
+  schema: boolean;
+  data: boolean;
+  tableMode: "all" | "selected";
+  tables: Resource<Table[]>;
+  // Database the table list was loaded for; the list is stale when it differs.
+  tablesFor: string;
+  tablesRequest: number;
+  // Structure and rows chosen for each listed table. Views have no rows.
+  tableParts: Map<string, Parts>;
+  tableFilter: string;
 };
+
+function newSession(profile: Profile): Session {
+  return { database: profile.connection.database, format: profile.engine === "mysql" ? "sql" : "custom", databases: { data: [], loading: false, error: "" }, testing: false, schema: true, data: true, tableMode: "all", tables: { data: [], loading: false, error: "" }, tablesFor: "", tablesRequest: 0, tableParts: new Map(), tableFilter: "" };
+}
+
+export function chosenTables(session: Session): TableContent[] {
+  return session.tables.data.flatMap(table => {
+    const parts = session.tableParts.get(table.name);
+    return parts && (parts.schema || parts.data) ? [{ name: table.name, schema: parts.schema, data: parts.data && !table.view }] : [];
+  });
+}
+
+export function exportProblem(session: Session): string {
+  if (!session.database.trim()) return "Choose a database above to continue.";
+  if (session.tableMode === "all") return session.schema || session.data ? "" : "Choose table structure, table data, or both.";
+  if (session.tables.loading) return "Loading tables...";
+  if (session.tablesFor !== session.database.trim()) return "Load the table list, or export all tables.";
+  const chosen = chosenTables(session);
+  if (!chosen.length) return "Choose structure or data for at least one table.";
+  if (session.format === "custom" && chosen.some(table => table.data && !table.schema) && chosen.some(table => table.schema)) return "A custom archive cannot mix data-only tables with tables that include structure. Choose SQL format, or add structure to those tables.";
+  return "";
+}
+
+function content(schema: boolean, data: boolean): ExportContent {
+  return schema && data ? "all" : schema ? "schema" : "data";
+}
+
+export function exportOptions(session: Session): ExportOptions {
+  const problem = exportProblem(session);
+  if (problem) throw new Error(problem);
+  if (session.tableMode === "all") return { format: session.format, content: content(session.schema, session.data), tables: [] };
+  // The same choice on every table is a whole-database export, which also keeps objects created after listing.
+  const first = session.tables.data.find(table => !table.view);
+  const parts = (name: string) => session.tableParts.get(name)!;
+  const uniform = first && session.tables.data.every(table => parts(table.name).schema === parts(first.name).schema && (table.view || parts(table.name).data === parts(first.name).data));
+  if (uniform) return { format: session.format, content: content(parts(first.name).schema, parts(first.name).data), tables: [] };
+  return { format: session.format, content: "all", tables: [], perTable: chosenTables(session) };
+}
+
+export function filteredTables(session: Session): Table[] {
+  const term = session.tableFilter.trim().toLocaleLowerCase();
+  return term ? session.tables.data.filter(table => table.name.toLocaleLowerCase().includes(term)) : session.tables.data;
+}
 export type Source = { name: string; value: string | File; library: boolean; size?: number };
 export type RestoreReview = Readonly<{
   profileName: string;
@@ -171,9 +225,7 @@ export class Workspace {
       const profile = await this.api.getProfile(name);
       if (generation !== this.selectionGeneration) return;
       this.profile = { ...profile, connection: { ...profile.connection } };
-      if (!this.sessions.has(name)) {
-        this.sessions.set(name, { database: profile.connection.database, format: profile.engine === "mysql" ? "sql" : "custom", databases: { data: [], loading: false, error: "" }, testing: false });
-      }
+      if (!this.sessions.has(name)) this.sessions.set(name, newSession(profile));
       const session = this.sessions.get(name)!;
       if (profile.engine === "mysql") session.format = "sql";
       session.test = undefined;
@@ -225,8 +277,57 @@ export class Workspace {
   }
 
   setDatabase(database: string): void {
-    if (this.session) this.session.database = database;
+    const session = this.session;
+    if (session && session.database !== database) {
+      session.database = database;
+      ++session.tablesRequest;
+      session.tables = { data: [], loading: false, error: "" };
+      session.tablesFor = "";
+      session.tableParts = new Map();
+      session.tableFilter = "";
+    }
     this.invalidateReview();
+  }
+
+  async loadTables(): Promise<void> {
+    const profile = this.profile;
+    const session = this.session;
+    const database = session?.database.trim();
+    if (!profile || !session || !database) return;
+    const request = ++session.tablesRequest;
+    const refresh = session.tablesFor === database;
+    session.tables = { data: refresh ? session.tables.data : [], loading: true, error: "" };
+    this.onChange();
+    try {
+      const data = await this.api.listTables(profile.engine, { ...profile.connection, database });
+      if (request !== session.tablesRequest) return;
+      // A first load applies the Include choice to every table. A refresh keeps
+      // earlier choices and leaves new tables out.
+      const parts = new Map<string, Parts>();
+      for (const table of data) parts.set(table.name, refresh ? session.tableParts.get(table.name) ?? { schema: false, data: false } : { schema: session.schema, data: session.data && !table.view });
+      session.tableParts = parts;
+      session.tables = { data, loading: false, error: "" };
+      session.tablesFor = database;
+    } catch (error) {
+      if (request === session.tablesRequest) session.tables = { data: refresh ? session.tables.data : [], loading: false, error: message(error, profile.connection.password) };
+    } finally { if (request === session.tablesRequest) this.onChange(); }
+  }
+
+  setTableMode(mode: Session["tableMode"]): void {
+    const session = this.session;
+    if (!session) return;
+    session.tableMode = mode;
+    if (mode === "selected" && !session.tables.loading && session.tablesFor !== session.database.trim()) void this.loadTables();
+  }
+
+  setTablePart(names: string[], part: keyof Parts, value: boolean): void {
+    const session = this.session;
+    if (!session) return;
+    const views = new Set(session.tables.data.filter(table => table.view).map(table => table.name));
+    for (const name of names) {
+      const parts = session.tableParts.get(name);
+      if (parts && !(part === "data" && views.has(name))) parts[part] = value;
+    }
   }
 
   get restoreDatabase(): string {

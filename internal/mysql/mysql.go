@@ -83,11 +83,94 @@ func (e *Engine) Export(ctx context.Context, cfg engine.Connection, opts engine.
 	if _, err := mysqlFormat(opts.Format); err != nil {
 		return err
 	}
-	return proc.Run(ctx, proc.RunOptions{
-		Path:   detected.Dump.Path,
-		Args:   dumpArgs(defaults, cfg, detected.Dump, opts.Tables),
-		Stdout: out,
-	})
+	sel, err := opts.Selection()
+	if err != nil {
+		return err
+	}
+	if err := checkDumpNames(cfg.Database, sel.Names()); err != nil {
+		return err
+	}
+	for _, run := range dumpRuns(sel) {
+		if err := proc.Run(ctx, proc.RunOptions{
+			Path:   detected.Dump.Path,
+			Args:   dumpArgs(defaults, cfg, detected.Dump, run.tables, run.schema, run.data),
+			Stdout: out,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type dumpRun struct {
+	tables       []string
+	schema, data bool
+}
+
+// dumpRuns splits a selection into mysqldump runs written one after another,
+// because one run applies the same content flags to every table. Each run has
+// its own transaction, so rows from different runs are not one snapshot. Views
+// are structure only, so they are created after the tables of the first run.
+func dumpRuns(sel engine.Selection) []dumpRun {
+	if sel.All {
+		return []dumpRun{{schema: sel.Schema, data: sel.Data}}
+	}
+	both, schemaOnly, dataOnly := sel.Groups()
+	runs := make([]dumpRun, 0, 3)
+	for _, run := range []dumpRun{{both, true, true}, {schemaOnly, true, false}, {dataOnly, false, true}} {
+		if len(run.tables) > 0 {
+			runs = append(runs, run)
+		}
+	}
+	return runs
+}
+
+// ListTables returns the tables and views in the selected database.
+func (e *Engine) ListTables(ctx context.Context, cfg engine.Connection) ([]engine.Table, error) {
+	if err := cfg.RequireDatabase(); err != nil {
+		return nil, err
+	}
+	cfg, detected, defaults, cleanup, err := e.prepare(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	if !detected.Client.Found {
+		return nil, fmt.Errorf("%w: mysql/mariadb", engine.ErrToolsMissing)
+	}
+	var out strings.Builder
+	if err := proc.Run(ctx, proc.RunOptions{
+		Path:   detected.Client.Path,
+		Args:   append(clientArgs(defaults, cfg, detected.Client), "--batch", "--raw", "--skip-column-names", "--execute", "SELECT table_type, table_name FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY table_name"),
+		Stdout: &out,
+	}); err != nil {
+		return nil, err
+	}
+	return parseTables(out.String()), nil
+}
+
+// parseTables reads "type<TAB>name" rows printed by the mysql client.
+func parseTables(raw string) []engine.Table {
+	tables := make([]engine.Table, 0)
+	for _, line := range strings.Split(raw, "\n") {
+		kind, name, ok := strings.Cut(strings.TrimRight(line, "\r"), "\t")
+		if !ok || name == "" {
+			continue
+		}
+		tables = append(tables, engine.Table{Name: name, View: strings.Contains(kind, "VIEW")})
+	}
+	return tables
+}
+
+// checkDumpNames rejects names mysqldump would read as options: it accepts
+// options anywhere on the command line, after the database and tables too.
+func checkDumpNames(database string, tables []string) error {
+	for _, name := range append([]string{database}, tables...) {
+		if strings.HasPrefix(strings.TrimSpace(name), "-") {
+			return fmt.Errorf("%w: names starting with \"-\" are not supported: %q", engine.ErrInvalidExport, name)
+		}
+	}
+	return nil
 }
 
 func (e *Engine) Import(ctx context.Context, cfg engine.Connection, opts engine.ImportOptions, in io.Reader) error {
@@ -238,13 +321,21 @@ func importArgs(defaults string, cfg engine.Connection, tool engine.Tool, disabl
 	return args
 }
 
-func dumpArgs(defaults string, cfg engine.Connection, tool engine.Tool, tables []string) []string {
+func dumpArgs(defaults string, cfg engine.Connection, tool engine.Tool, tables []string, schema, data bool) []string {
 	args := []string{
 		"--defaults-file=" + defaults,
 		"--protocol=TCP",
 		"--single-transaction",
-		"--triggers",
 		"--hex-blob",
+	}
+	switch {
+	case !data:
+		args = append(args, "--no-data", "--triggers")
+	case !schema:
+		// Rows only, for tables that already exist with their own triggers.
+		args = append(args, "--no-create-info", "--skip-triggers")
+	default:
+		args = append(args, "--triggers")
 	}
 	args = append(args, sslArgs(tool, cfg.SSLMode)...)
 	if f := flavorOf(tool); !f.maria {

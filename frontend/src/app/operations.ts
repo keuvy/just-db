@@ -1,4 +1,4 @@
-import type { Profile } from "../api";
+import type { ExportOptions, Profile } from "../api";
 import type { Client } from "./client";
 import { message, type RestoreReview } from "./state";
 
@@ -12,6 +12,8 @@ export type Operation = {
   ended?: number;
   status: "running" | "success" | "warning" | "error";
   text: string;
+  // What a partial export contained, such as "Structure only · 3 tables".
+  scope?: string;
   fileName?: string;
   sourceName?: string;
   librarySource?: boolean;
@@ -43,13 +45,14 @@ export class Operations {
     this.onChange();
   }
 
-  async export(profile: Profile, database: string, format: string): Promise<boolean> {
+  async export(profile: Profile, database: string, options: ExportOptions): Promise<boolean> {
     const snapshot = { ...profile, connection: { ...profile.connection, database: database.trim() } };
     if (!snapshot.connection.database) throw new Error("Choose a database first.");
     const record = this.begin("export", snapshot);
     if (!record) return false;
+    record.scope = exportScope(options);
     try {
-      const result = await this.api.exportDump(snapshot.engine, snapshot.connection, format, "");
+      const result = await this.api.exportDump(snapshot.engine, snapshot.connection, structuredClone(options), "");
       record.fileName = result.path.split(/[\\/]/).pop()!;
       record.bytes = result.bytes;
       await this.copy(record, snapshot.connection.password);
@@ -94,4 +97,16 @@ export class Operations {
     } finally { this.end(record); }
     return true;
   }
+}
+
+export function exportScope(options: ExportOptions): string {
+  if (options.perTable) {
+    const count = (part: "schema" | "data") => options.perTable!.filter(table => table[part]).length;
+    return `${options.perTable.length === 1 ? "1 table" : `${options.perTable.length} tables`} · structure for ${count("schema")}, data for ${count("data")}`;
+  }
+  const parts = [];
+  if (options.content === "schema") parts.push("Structure only");
+  if (options.content === "data") parts.push("Data only");
+  if (options.tables.length) parts.push(options.tables.length === 1 ? "1 table" : `${options.tables.length} tables`);
+  return parts.join(" · ");
 }

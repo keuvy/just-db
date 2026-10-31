@@ -72,6 +72,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/profiles", s.handleProfileList)
 	s.mux.HandleFunc("POST /api/test-connection", s.handleTestConnection)
 	s.mux.HandleFunc("POST /api/databases", s.handleListDatabases)
+	s.mux.HandleFunc("POST /api/tables", s.handleListTables)
 	s.mux.HandleFunc("POST /api/export", s.handleExport)
 	s.mux.HandleFunc("POST /api/import", s.handleImport)
 	s.mux.Handle("/", s.uiHandler())

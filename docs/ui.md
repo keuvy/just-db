@@ -20,6 +20,12 @@ Database fields use searchable dropdowns and also accept a manually entered name
 
 **Export** offers PostgreSQL custom or SQL format; MySQL/MariaDB uses SQL. The app creates the dump in its library, then starts a browser download or opens the desktop save dialog. Cancelling that dialog leaves the original dump intact. A failed copy can be retried from the result without exporting again.
 
+**Tables** exports all tables, or tables chosen from a filterable list of the selected database. With **All tables**, **Include** chooses table structure, table data, or both for the whole database. With **Choose tables**, each table has its own **Structure** and **Data** boxes, and the column headers set a column for every shown table. Views have structure only. The list starts from the current Include choice. Choosing a different database clears the list and loads the new one. If every table keeps the same choice, the app runs a whole-database export.
+
+Structure-only and data-only dumps get `-structure` or `-data` in the default file name. A table exported with data only has no `CREATE` or `DROP` statement, so restore it into a table that already exists. Its MySQL triggers are left out too.
+
+Mixed choices need more than one dump run. MySQL writes up to three runs into the file: tables with both, structure only, then data only. Each run is its own transaction, so rows from different runs are not one snapshot. PostgreSQL uses one run unless data-only tables are mixed with tables that have structure. Plain SQL then runs pg_dump three times: table definitions, rows, then indexes, constraints, and triggers. A custom archive cannot combine runs, so the app asks for SQL format for that mix. A PostgreSQL dump of chosen tables does not include the types, functions, or other objects those tables depend on.
+
 **Restore** has three steps:
 
 1. Choose a local file or a file from the dump library.

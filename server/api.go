@@ -33,11 +33,13 @@ type testRequest struct {
 }
 
 type exportRequest struct {
-	Engine     engine.Name   `json:"engine"`
-	Connection apiConnection `json:"connection"`
-	Format     string        `json:"format"`
-	Tables     []string      `json:"tables"`
-	FileName   string        `json:"fileName"`
+	Engine     engine.Name           `json:"engine"`
+	Connection apiConnection         `json:"connection"`
+	Format     string                `json:"format"`
+	Tables     []string              `json:"tables"`
+	Content    string                `json:"content"`
+	PerTable   []engine.TableContent `json:"perTable"`
+	FileName   string                `json:"fileName"`
 }
 
 type importRequest struct {
@@ -88,6 +90,25 @@ func (s *Server) handleListDatabases(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"databases": names})
 }
 
+func (s *Server) handleListTables(w http.ResponseWriter, r *http.Request) {
+	var req testRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	eng, err := s.reg.Get(req.Engine)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	tables, err := eng.ListTables(r.Context(), req.Connection.toEngine())
+	if err != nil {
+		writeError(w, statusFor(err), err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tables": tables})
+}
+
 func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	id := started.UnixNano()
@@ -115,20 +136,26 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		fail(http.StatusBadRequest, err)
 		return
 	}
-	format := engine.CoerceFormat(eng.Name(), engine.InferFormat(req.FileName, req.Format))
+	opts := engine.ExportOptions{
+		Format:   engine.CoerceFormat(eng.Name(), engine.InferFormat(req.FileName, req.Format)),
+		Tables:   req.Tables,
+		Content:  req.Content,
+		PerTable: req.PerTable,
+	}
+	if _, err := opts.Selection(); err != nil {
+		fail(http.StatusBadRequest, err)
+		return
+	}
 	name := req.FileName
 	if strings.TrimSpace(name) == "" {
-		name = job.DefaultFileName(eng.Name(), req.Connection.Database, format)
+		name = job.DefaultExportName(eng.Name(), req.Connection.Database, opts)
 	}
 	path, err := s.dumpPath(name)
 	if err != nil {
 		fail(http.StatusBadRequest, err)
 		return
 	}
-	result, err := job.ExportToFile(r.Context(), eng, req.Connection.toEngine(), engine.ExportOptions{
-		Format: format,
-		Tables: req.Tables,
-	}, path)
+	result, err := job.ExportToFile(r.Context(), eng, req.Connection.toEngine(), opts, path)
 	if err != nil {
 		fail(statusFor(err), err)
 		return
@@ -377,6 +404,7 @@ func statusFor(err error) int {
 	case errors.Is(err, engine.ErrInvalidConnection),
 		errors.Is(err, job.ErrInvalidDump),
 		errors.Is(err, engine.ErrUnsupportedFormat),
+		errors.Is(err, engine.ErrInvalidExport),
 		errors.Is(err, engine.ErrImportNotConfirmed),
 		errors.Is(err, profile.ErrInvalidName):
 		return http.StatusBadRequest

@@ -29,6 +29,9 @@ The tests create tables and databases and perform restores. Use fresh, disposabl
 | --- | --- | --- |
 | `TestRoundTripCustomAndSQL` | `postgres:18-alpine` | PostgreSQL connection, custom/SQL export and restore, confirmation requirement, restored data |
 | `TestRoundTripSQL` | `mysql:8.4` | MySQL connection, SQL export and restore, drop-existing behavior, confirmation requirement, restored data |
+| `TestRoundTripTablesAndContent` | Both images | Table listing, structure-only, data-only, and per-table mixed exports, restoring them into empty databases. Checks MySQL triggers do not fire while rows load and that PostgreSQL custom archives reject an unsupported mix |
+
+With an externally provisioned server, `TestRoundTripTablesAndContent` uses an administrative account and creates its own `justdb_parts_*` databases.
 
 When no test host is configured, each test looks for Podman before Docker and tries to start a temporary container. It skips if neither command is available or the container cannot start. The host running the Go tests still needs compatible client executables; starting a database container does not provide client tools to that host.
 

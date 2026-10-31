@@ -65,6 +65,8 @@ export function replaceRegion(element: HTMLElement, html: string): void {
   const top = element.scrollTop;
   element.innerHTML = html;
   element.scrollTop = top;
+  // HTML cannot express a partly checked box; it is a property only.
+  element.querySelectorAll<HTMLInputElement>("input[data-mixed]").forEach(input => { input.indeterminate = true; });
   if (id || action) {
     const selector = id ? `#${CSS.escape(id)}` : `[data-action="${CSS.escape(action!)}"]${name ? `[data-name="${CSS.escape(name)}"]` : ""}${theme ? `[data-theme="${CSS.escape(theme)}"]` : ""}`;
     const replacement = element.querySelector<HTMLElement>(selector);

@@ -7,12 +7,12 @@ Two binaries share one Go engine:
 - `just-db serve` — web UI for EasyPanel / Docker
 - Wails desktop app — native window on Debian, Fedora, Arch, and macOS
 
-SQLite is not implemented in version 0.4.1.
+SQLite is not implemented in version 0.4.2.
 
-## Version 0.4.1
+## Version 0.4.2
 
-- The desktop app starts maximized.
-- Windows x86-64 builds now include a standalone executable and installer, built with `make package-windows-docker`.
+- Export can include table structure, table data, or both. **Choose tables** lists the database's tables with a Structure and a Data box for each one. The CLI has `-tables` and `-content` flags for one choice across the chosen tables.
+- MySQL exports work with MySQL 5.7 and MariaDB clients installed as `mysqldump`; flags are chosen from the client's version.
 
 Guides and current limitations: [documentation index](docs/README.md).
 
@@ -36,6 +36,7 @@ go run ./cmd/just-db profile save -name prod -engine postgres -host 127.0.0.1 -u
 go run ./cmd/just-db test -profile prod
 go run ./cmd/just-db export -profile prod -format custom -out ./data/backups/app.dump
 go run ./cmd/just-db export -engine mysql -host 127.0.0.1 -port 3306 -user justdb -database justdb -format sql -out ./data/backups/app.sql
+go run ./cmd/just-db export -profile prod -tables users,orders -content schema -out ./data/backups/structure.dump
 go run ./cmd/just-db import -engine mysql -host 127.0.0.1 -port 3306 -user justdb -database justdb -in ./data/backups/app.sql -confirm
 ```
 
@@ -59,7 +60,7 @@ wails doctor
 make desktop
 ```
 
-The GUI executable is **`just-db-desktop`**; the macOS bundle is `desktop/build/bin/just-db.app`. For a universal Intel/Apple Silicon installer, install `create-dmg` and run `make dmg`. Version 0.4.1 produces `dist/just-db-0.4.1.dmg`. Details: [desktop builds and packaging](docs/desktop.md).
+The GUI executable is **`just-db-desktop`**; the macOS bundle is `desktop/build/bin/just-db.app`. For a universal Intel/Apple Silicon installer, install `create-dmg` and run `make dmg`. Version 0.4.2 produces `dist/just-db-0.4.2.dmg`. Details: [desktop builds and packaging](docs/desktop.md).
 
 To build the Linux x86-64 desktop executable and `.deb`/`.rpm` installers from
 macOS with Docker running:

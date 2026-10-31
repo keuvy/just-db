@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { Workspace, fileFormat, requiredTool } from "../src/app/state";
+import { Workspace, exportOptions, exportProblem, fileFormat, requiredTool } from "../src/app/state";
 import { Operations } from "../src/app/operations";
 import { createPreviewClient } from "../src/preview";
-import type { Profile } from "../src/api";
+import type { Profile, Table } from "../src/api";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -10,6 +10,8 @@ function deferred<T>() {
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 }
+
+const full = (format: string) => ({ format, content: "all" as const, tables: [] });
 
 async function ready() {
   const api = createPreviewClient({ delay: 0 });
@@ -206,14 +208,14 @@ describe("operation results", () => {
     const pending = deferred<{ path: string; bytes: number; format: string }>();
     api.exportDump = vi.fn(() => pending.promise);
     const operations = new Operations(api);
-    const first = operations.export(state.profile!, "original_db", "custom");
+    const first = operations.export(state.profile!, "original_db", full("custom"));
     state.profile!.connection.database = "changed";
-    const second = await operations.export(state.profile!, "other_db", "custom");
+    const second = await operations.export(state.profile!, "other_db", full("custom"));
     expect(second).toBe(false);
     expect(api.exportDump).toHaveBeenCalledTimes(1);
     pending.resolve({ path: "/backups/original.dump", bytes: 100, format: "custom" });
     await first;
-    expect(api.exportDump).toHaveBeenCalledWith("postgres", expect.objectContaining({ database: "original_db" }), "custom", "");
+    expect(api.exportDump).toHaveBeenCalledWith("postgres", expect.objectContaining({ database: "original_db" }), full("custom"), "");
     expect(operations.records[0].database).toBe("original_db");
   });
 
@@ -222,7 +224,7 @@ describe("operation results", () => {
     api.runtimeMode = () => "desktop";
     api.downloadDump = vi.fn().mockResolvedValue(false);
     const operations = new Operations(api);
-    await operations.export(state.profile!, "example", "custom");
+    await operations.export(state.profile!, "example", full("custom"));
     expect(operations.records[0].status).toBe("success");
     expect(operations.records[0].text).toContain("Save cancelled");
     expect(operations.records[0].fileName).toBeTruthy();
@@ -234,7 +236,7 @@ describe("operation results", () => {
     api.exportDump = vi.fn(original);
     api.downloadDump = vi.fn().mockRejectedValueOnce(new Error("copy failed")).mockResolvedValue(true);
     const operations = new Operations(api);
-    await operations.export(state.profile!, "example", "sql");
+    await operations.export(state.profile!, "example", full("sql"));
     const result = operations.records[0];
     expect(result.status).toBe("warning");
     await operations.copy(result);
@@ -248,8 +250,95 @@ describe("operation results", () => {
     state.profile!.connection.password = "test-secret-value";
     api.exportDump = vi.fn().mockRejectedValue(new Error("failed test-secret-value"));
     const operations = new Operations(api);
-    await operations.export(state.profile!, "example", "custom");
+    await operations.export(state.profile!, "example", full("custom"));
     expect(JSON.stringify(operations.records)).not.toContain("test-secret-value");
     expect(operations.records[0].status).toBe("error");
+  });
+});
+
+describe("export choices", () => {
+  it("sends a whole-database export until per-table choices differ", async () => {
+    const { state } = await ready();
+    const session = state.session!;
+    expect(exportOptions(session)).toEqual(full("custom"));
+    state.setTableMode("selected");
+    expect(exportProblem(session)).toBe("Loading tables...");
+    await vi.waitFor(() => expect(session.tablesFor).toBe("app_development"));
+    expect(session.tableParts.get("public.orders")).toEqual({ schema: true, data: true });
+    expect(session.tableParts.get("public.active_customers")).toEqual({ schema: true, data: false });
+    expect(exportOptions(session)).toEqual(full("custom"));
+    const names = session.tables.data.map(table => table.name);
+    state.setTablePart(names, "data", false);
+    expect(exportOptions(session)).toEqual({ format: "custom", content: "schema", tables: [] });
+    state.setTablePart(["public.orders"], "data", true);
+    state.setTablePart(["public.sessions"], "schema", false);
+    const options = exportOptions(session);
+    expect(options.perTable).toHaveLength(names.length - 1);
+    expect(options.perTable).toContainEqual({ name: "public.orders", schema: true, data: true });
+    expect(options.perTable).toContainEqual({ name: "public.active_customers", schema: true, data: false });
+    expect(options.perTable?.some(table => table.name === "public.sessions")).toBe(false);
+    state.setTablePart(["public.orders"], "schema", false);
+    expect(() => exportOptions(session)).toThrow("custom archive cannot mix");
+    session.format = "sql";
+    expect(exportOptions(session).perTable).toContainEqual({ name: "public.orders", schema: false, data: true });
+    state.setTablePart(names, "schema", false);
+    state.setTablePart(names, "data", false);
+    expect(() => exportOptions(session)).toThrow("at least one table");
+    state.setTableMode("all");
+    expect(exportOptions(session)).toEqual(full("sql"));
+  });
+
+  it("allows a custom archive with rows left out of some tables", async () => {
+    const { state } = await ready();
+    const session = state.session!;
+    state.setTableMode("selected");
+    await vi.waitFor(() => expect(session.tablesFor).toBe("app_development"));
+    state.setTablePart(["public.audit_log"], "data", false);
+    expect(exportProblem(session)).toBe("");
+    expect(exportOptions(session).perTable).toContainEqual({ name: "public.audit_log", schema: true, data: false });
+  });
+
+  it("maps structure and data choices to export content", async () => {
+    const { state } = await ready();
+    const session = state.session!;
+    session.data = false;
+    expect(exportOptions(session).content).toBe("schema");
+    session.data = true;
+    session.schema = false;
+    expect(exportOptions(session).content).toBe("data");
+    session.data = false;
+    expect(() => exportOptions(session)).toThrow("structure, table data, or both");
+  });
+
+  it("starts the table list from the Include choice", async () => {
+    const { state } = await ready();
+    state.session!.schema = false;
+    await state.loadTables();
+    expect(state.session!.tableParts.get("public.orders")).toEqual({ schema: false, data: true });
+    expect(state.session!.tableParts.get("public.active_customers")).toEqual({ schema: false, data: false });
+  });
+
+  it("drops the table list when the database changes, even if it arrives late", async () => {
+    const { api, state } = await ready();
+    const list = deferred<Table[]>();
+    api.listTables = vi.fn().mockReturnValueOnce(list.promise);
+    state.session!.tableMode = "selected";
+    const pending = state.loadTables();
+    state.setDatabase("app_test");
+    list.resolve([{ name: "public.stale" }]);
+    await pending;
+    expect(api.listTables).toHaveBeenCalledWith("postgres", expect.objectContaining({ database: "app_development" }));
+    expect(state.session).toMatchObject({ tablesFor: "", tableMode: "selected", tables: { data: [], loading: false } });
+    expect(state.session!.tableParts.size).toBe(0);
+    expect(exportProblem(state.session!)).toContain("Load the table list");
+  });
+
+  it("keeps earlier choices when the table list is refreshed", async () => {
+    const { api, state } = await ready();
+    api.listTables = vi.fn().mockResolvedValueOnce([{ name: "a" }, { name: "b" }, { name: "c" }]).mockResolvedValueOnce([{ name: "a" }, { name: "c" }, { name: "d" }]);
+    await state.loadTables();
+    state.setTablePart(["c"], "data", false);
+    await state.loadTables();
+    expect(Object.fromEntries(state.session!.tableParts)).toEqual({ a: { schema: true, data: true }, c: { schema: true, data: false }, d: { schema: false, data: false } });
   });
 });

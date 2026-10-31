@@ -54,7 +54,7 @@ PostgreSQL custom restore uses a seekable file. The Go import contract requires 
 | PostgreSQL SQL | Drops `public` with `CASCADE`, recreates it, and reapplies grants before running the SQL |
 | MySQL / MariaDB SQL | Drops base tables in the selected database before running the SQL |
 
-These operations do not issue `DROP DATABASE`. SQL files can contain destructive statements independently of the drop-existing option; PostgreSQL SQL exports currently include `--clean --if-exists`. A failed restore can leave partial changes.
+These operations do not issue `DROP DATABASE`. SQL files can contain destructive statements independently of the drop-existing option; PostgreSQL SQL exports include `--clean --if-exists` unless they are data only. A failed restore can leave partial changes.
 
 PostgreSQL passwords are passed through `PGPASSWORD`. MySQL uses a temporary mode-0600 defaults file with `--defaults-file` first in the command arguments. MySQL/MariaDB-specific SSL, public-key, and dump flags are selected from the detected client's `--version` output, so a MariaDB or MySQL 5.7 binary named `mysqldump` gets only flags it accepts. See the [engine source](../internal/mysql/mysql.go).
 
@@ -69,7 +69,7 @@ Run from the repository with `go run ./cmd/just-db <command>`, or use a built `j
 | `serve` | HTTP app; `-listen`, `-data`, `-ui`, `-auth-user`, `-auth-password` |
 | `test` | Test a connection; connection flags or `-profile NAME` |
 | `databases` | List databases; connection flags or `-profile NAME` |
-| `export` | Export with required `-out`; optional `-format sql` or `-format custom` |
+| `export` | Export with required `-out`; optional `-format sql` or `-format custom`, `-tables a,b`, and `-content all`, `schema`, or `data` |
 | `import` | Restore with required `-in` and `-confirm`; optional `-drop`, `-no-fk-checks`, and `-format` |
 | `profile list` | List summaries; optional `-data` |
 | `profile save` | Create or overwrite `-name NAME` using connection flags |
@@ -98,7 +98,8 @@ Routes are defined in [`server/server.go`](../server/server.go); payloads and fi
 | DELETE | `/api/profiles/{name}` | Delete the named profile |
 | POST | `/api/test-connection` | Test `{engine, connection}` |
 | POST | `/api/databases` | List databases for `{engine, connection}` |
-| POST | `/api/export` | Export `{engine, connection, format, fileName, tables}` and return path/size/format |
+| POST | `/api/tables` | List tables and views in `connection.database` as `{name, view}` |
+| POST | `/api/export` | Export `{engine, connection, format, fileName, tables, content, perTable}` and return path/size/format. `content` is `all` (default), `schema`, or `data`. `perTable` lists `{name, schema, data}` and replaces `tables` and `content` |
 | POST | `/api/import` | Restore a stored dump via JSON or a browser upload via multipart |
 
 Import JSON uses `engine`, `connection`, `format`, `fileName`, `dropExisting`, `disableForeignKeys`, and `confirm`. Multipart uses the same connection/options fields plus `file`; `connection` is JSON text. Uploads accept `.sql`, `.dump`, `.backup`, `.pgdump`, `.gz`, and `.zip`, are copied to temporary storage, and are removed after the request. Compressed imports accept `format: "auto"` or an omitted format to detect SQL or PostgreSQL custom contents after decompression. ZIP archives must contain exactly one supported dump. The 32 MiB multipart setting is a memory threshold, not a maximum upload size.

@@ -4,7 +4,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"just-db/internal/engine"
 )
 
 func TestIsDumpName(t *testing.T) {
@@ -97,5 +100,18 @@ func TestListDumps(t *testing.T) {
 	}
 	if len(dumps) != 1 || dumps[0].Name != "a.dump" {
 		t.Fatalf("%+v", dumps)
+	}
+}
+
+func TestDefaultExportName(t *testing.T) {
+	cases := map[string]string{"": "", "all": "", "schema": "-structure", "data": "-data"}
+	for content, suffix := range cases {
+		name := DefaultExportName(engine.MySQL, "shop", engine.ExportOptions{Content: content})
+		if !strings.HasPrefix(name, "mysql-shop-") || !strings.HasSuffix(name, suffix+".sql") || (suffix == "" && strings.Contains(name, "-structure")) {
+			t.Errorf("%q: %s", content, name)
+		}
+	}
+	if name := DefaultExportName(engine.Postgres, "shop", engine.ExportOptions{Content: "schema"}); !strings.HasSuffix(name, "-structure.dump") {
+		t.Errorf("postgres: %s", name)
 	}
 }

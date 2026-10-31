@@ -66,6 +66,28 @@ export type Profile = {
   connection: Connection;
 };
 
+export type Table = {
+  name: string;
+  view?: boolean;
+};
+
+export type ExportContent = "all" | "schema" | "data";
+
+export type TableContent = {
+  name: string;
+  schema: boolean;
+  data: boolean;
+};
+
+export type ExportOptions = {
+  format: string;
+  content: ExportContent;
+  // Empty exports every table.
+  tables: string[];
+  // Structure and rows chosen per table; replaces tables and content.
+  perTable?: TableContent[];
+};
+
 export type ExportResult = {
   path: string;
   bytes: number;
@@ -79,7 +101,7 @@ type WailsApp = {
   Export: (
     name: string,
     cfg: Connection,
-    opts: { format: string },
+    opts: ExportOptions,
     destPath: string,
   ) => Promise<ExportResult>;
   ImportDump: (
@@ -100,6 +122,7 @@ type WailsApp = {
   PutProfile: (name: string, engineName: string, cfg: Connection) => Promise<void>;
   DeleteProfile: (name: string) => Promise<void>;
   ListDatabases: (name: string, cfg: Connection) => Promise<string[]>;
+  ListTables: (name: string, cfg: Connection) => Promise<Table[]>;
 };
 
 function wailsApp(): WailsApp | undefined {
@@ -169,17 +192,17 @@ export async function testConnection(engine: string, connection: Connection): Pr
 export async function exportDump(
   engine: string,
   connection: Connection,
-  format: string,
+  options: ExportOptions,
   fileName: string,
 ): Promise<ExportResult> {
   const app = wailsApp();
   if (app?.Export) {
-    return app.Export(engine, connection, { format }, fileName);
+    return app.Export(engine, connection, options, fileName);
   }
   const response = await fetch("/api/export", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ engine, connection, format, fileName }),
+    body: JSON.stringify({ engine, connection, ...options, fileName }),
   });
   if (!response.ok) {
     throw new Error(await readError(response));
@@ -387,4 +410,21 @@ export async function listDatabases(engine: string, connection: Connection): Pro
   }
   const body = (await response.json()) as { databases: string[] };
   return body.databases ?? [];
+}
+
+export async function listTables(engine: string, connection: Connection): Promise<Table[]> {
+  const app = wailsApp();
+  if (app?.ListTables) {
+    return (await app.ListTables(engine, connection)) ?? [];
+  }
+  const response = await fetch("/api/tables", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ engine, connection }),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  const body = (await response.json()) as { tables: Table[] };
+  return body.tables ?? [];
 }

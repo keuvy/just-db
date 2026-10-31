@@ -14,7 +14,7 @@
   "info": {
     "companyName": "just-db",
     "productName": "just-db",
-    "productVersion": "0.4.1",
+    "productVersion": "0.4.2",
     "comments": "Import and export PostgreSQL and MySQL databases"
   }
 }

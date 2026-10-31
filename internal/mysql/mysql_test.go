@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -17,7 +18,7 @@ func TestDumpArgsNeverIncludePassword(t *testing.T) {
 		SSLMode:  "disable",
 	}.Normalized(3306)
 	tool := engine.Tool{Name: "mysqldump", Path: "/usr/bin/mysqldump"}
-	args := dumpArgs("/tmp/justdb-my.cnf", cfg, tool, []string{"items"})
+	args := dumpArgs("/tmp/justdb-my.cnf", cfg, tool, []string{"items"}, true, true)
 	if ContainsPassword(args, cfg.Password) {
 		t.Fatalf("password leaked into argv: %q", args)
 	}
@@ -119,7 +120,7 @@ func TestDumpArgsMatchClientRelease(t *testing.T) {
 	}
 	for _, c := range cases {
 		tool := engine.Tool{Name: "mysqldump", Path: "/usr/local/bin/mysqldump", Version: c.version}
-		args := dumpArgs("/tmp/justdb-my.cnf", cfg, tool, nil)
+		args := dumpArgs("/tmp/justdb-my.cnf", cfg, tool, nil, true, true)
 		has := map[string]bool{}
 		for _, arg := range args {
 			has[arg] = true
@@ -133,6 +134,92 @@ func TestDumpArgsMatchClientRelease(t *testing.T) {
 			if has[bad] {
 				t.Errorf("%q: unexpected %s in %q", c.version, bad, args)
 			}
+		}
+	}
+}
+
+func TestDumpArgsContent(t *testing.T) {
+	cfg := engine.Connection{Host: "db", Port: 3306, User: "app", Database: "appdb"}.Normalized(3306)
+	tool := engine.Tool{Name: "mysqldump", Path: "/usr/bin/mysqldump"}
+	cases := []struct {
+		schema, data     bool
+		include, exclude []string
+	}{
+		{true, true, []string{"--triggers"}, []string{"--no-data", "--no-create-info", "--skip-triggers"}},
+		{true, false, []string{"--no-data", "--triggers"}, []string{"--no-create-info", "--skip-triggers"}},
+		{false, true, []string{"--no-create-info", "--skip-triggers"}, []string{"--no-data", "--triggers"}},
+	}
+	for _, c := range cases {
+		args := dumpArgs("/tmp/justdb-my.cnf", cfg, tool, []string{" items ", "", "orders"}, c.schema, c.data)
+		joined := " " + strings.Join(args, " ") + " "
+		for _, want := range c.include {
+			if !strings.Contains(joined, " "+want+" ") {
+				t.Errorf("schema=%v data=%v: missing %s in %q", c.schema, c.data, want, args)
+			}
+		}
+		for _, bad := range c.exclude {
+			if strings.Contains(joined, " "+bad+" ") {
+				t.Errorf("schema=%v data=%v: unexpected %s in %q", c.schema, c.data, bad, args)
+			}
+		}
+		if tail := args[len(args)-3:]; tail[0] != "appdb" || tail[1] != "items" || tail[2] != "orders" {
+			t.Errorf("database and tables must end the command: %q", args)
+		}
+	}
+}
+
+func TestCheckDumpNames(t *testing.T) {
+	if err := checkDumpNames("appdb", []string{"items", "order-lines"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, tables := range [][]string{{"--result-file=/tmp/x"}, {" -d"}} {
+		if err := checkDumpNames("appdb", tables); !errors.Is(err, engine.ErrInvalidExport) {
+			t.Errorf("%q: expected ErrInvalidExport, got %v", tables, err)
+		}
+	}
+	if err := checkDumpNames("--all-databases", nil); !errors.Is(err, engine.ErrInvalidExport) {
+		t.Errorf("database: expected ErrInvalidExport, got %v", err)
+	}
+}
+
+func TestParseTables(t *testing.T) {
+	got := parseTables("BASE TABLE\titems\nVIEW\tactive items\r\nSYSTEM VIEW\tx\n\nbad line\n")
+	want := []engine.Table{{Name: "items"}, {Name: "active items", View: true}, {Name: "x", View: true}}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %+v", got)
+		}
+	}
+}
+
+func TestDumpRuns(t *testing.T) {
+	sel, err := engine.ExportOptions{Content: "data"}.Selection()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runs := dumpRuns(sel); len(runs) != 1 || runs[0].tables != nil || runs[0].schema || !runs[0].data {
+		t.Fatalf("full data-only export: %+v", runs)
+	}
+	sel, err = engine.ExportOptions{PerTable: []engine.TableContent{
+		{Name: "rows", Data: true},
+		{Name: "both", Schema: true, Data: true},
+		{Name: "view", Schema: true},
+		{Name: "both2", Schema: true, Data: true},
+	}}.Selection()
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := dumpRuns(sel)
+	want := []dumpRun{{[]string{"both", "both2"}, true, true}, {[]string{"view"}, true, false}, {[]string{"rows"}, false, true}}
+	if len(runs) != len(want) {
+		t.Fatalf("runs: %+v", runs)
+	}
+	for i := range want {
+		if strings.Join(runs[i].tables, ",") != strings.Join(want[i].tables, ",") || runs[i].schema != want[i].schema || runs[i].data != want[i].data {
+			t.Fatalf("run %d: got %+v want %+v", i, runs[i], want[i])
 		}
 	}
 }

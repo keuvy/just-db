@@ -79,6 +79,14 @@ func (a *App) ListDatabases(name string, cfg engine.Connection) ([]string, error
 	return eng.ListDatabases(a.context(), cfg)
 }
 
+func (a *App) ListTables(name string, cfg engine.Connection) ([]engine.Table, error) {
+	eng, err := a.reg.Get(engine.Name(name))
+	if err != nil {
+		return nil, err
+	}
+	return eng.ListTables(a.context(), cfg)
+}
+
 func (a *App) Export(name string, cfg engine.Connection, opts engine.ExportOptions, destPath string) (engine.ExportResult, error) {
 	eng, err := a.reg.Get(engine.Name(name))
 	if err != nil {
@@ -89,8 +97,7 @@ func (a *App) Export(name string, cfg engine.Connection, opts engine.ExportOptio
 		if err != nil {
 			return engine.ExportResult{}, err
 		}
-		format := engine.CoerceFormat(eng.Name(), opts.Format)
-		destPath = filepath.Join(dir, job.DefaultFileName(eng.Name(), cfg.Database, format))
+		destPath = filepath.Join(dir, job.DefaultExportName(eng.Name(), cfg.Database, opts))
 	}
 	return job.ExportToFile(a.context(), eng, cfg, opts, destPath)
 }

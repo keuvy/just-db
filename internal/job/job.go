@@ -116,6 +116,22 @@ func DefaultFileName(eng engine.Name, database, format string) string {
 	return fmt.Sprintf("%s-%s-%s%s", eng, db, stamp, ext)
 }
 
+// DefaultExportName is DefaultFileName with a suffix for structure-only or
+// data-only dumps, so they are not mistaken for full dumps in the library.
+func DefaultExportName(eng engine.Name, database string, opts engine.ExportOptions) string {
+	name := DefaultFileName(eng, database, engine.CoerceFormat(eng, opts.Format))
+	sel, err := opts.Selection()
+	if err != nil || sel.Schema == sel.Data {
+		return name
+	}
+	suffix := "-structure"
+	if sel.Data {
+		suffix = "-data"
+	}
+	ext := filepath.Ext(name)
+	return strings.TrimSuffix(name, ext) + suffix + ext
+}
+
 func ExportToFile(ctx context.Context, eng engine.Engine, cfg engine.Connection, opts engine.ExportOptions, path string) (engine.ExportResult, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return engine.ExportResult{}, err
